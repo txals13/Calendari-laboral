@@ -80,6 +80,12 @@ setembre a l'ordinador sense que l'un esborri l'altre: per a cada data guanya la
 versió amb la marca de temps més alta. Esborrar un dia hi deixa una làpida durant
 90 dies perquè l'altre dispositiu no el ressusciti.
 
+**Si no et deixa connectar**, mira l'adreça del navegador. Ha de ser
+`https://txals13.github.io/Calendari-laboral/`. Si hi diu `file:///C:/...` estàs
+obrint el fitxer del disc i Google no hi pot autenticar: el punt de sincronització
+es posa **⊘** i t'ho explica. Passa fàcilment a l'ordinador, on és temptador obrir
+l'`index.html` d'OneDrive amb doble clic.
+
 > **Cal servir-la des d'un origen autoritzat.** Fa servir el mateix client OAuth
 > que el Field Service Log, registrat per a `https://txals13.github.io`. Publicada
 > en qualsevol repositori d'aquest usuari a GitHub Pages funciona sense tocar res
