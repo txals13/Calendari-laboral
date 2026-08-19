@@ -534,21 +534,20 @@ function quotaEscala(base){
     estimació dels mesos des de l'inici del contracte que encara no tenen dades. */
 function previsibles(y){
   const P = yr(y).pay;
-  let reg = 0, regSS = 0, primerMes = null;
+  let reg = 0, regSS = 0, estim = 0, mesosReg = 0, mesosEst = 0;
   for(let m=0;m<12;m++){
     const M = payMonth(y,m,true);
-    if(M.dies.length){ reg += M.subjecte; regSS += -M.ss; if(primerMes === null) primerMes = m; }
+    if(M.dies.length){ reg += M.subjecte; regSS += -M.ss; mesosReg++; }
+    /* Els mesos del contracte que encara no tens entrats també s'han de
+       preveure: si no, el tipus es calcula sobre un any incomplet i surt massa
+       baix. Se n'estima només la part fixa —salari i paga extra—, perquè
+       hores extres i dietes no es poden endevinar. */
+    else if(M.diesAlta > 0){ estim += M.salari + M.pagaExtra; mesosEst++; }
   }
-  let estim = 0;
-  const ini = new Date(P.contracteIni + "T00:00:00");
-  if(!isNaN(ini) && primerMes !== null){
-    const fi = new Date(y, primerMes, 1);
-    const dies = Math.max(0, Math.round((fi - ini) / 864e5));
-    estim = r2(P.salari / 365 * dies);
-  }
+  estim = r2(estim);
   /* SS previsible: la real dels mesos registrats + el tipus pla sobre l'estimació */
   const ss = r2(regSS + estim * (P.ssCC + P.ssAtur + P.ssFP + P.ssMEI));
-  return {reg: r2(reg), estim, total: r2(reg + estim), ss};
+  return {reg: r2(reg), estim, total: r2(reg + estim), ss, mesosReg, mesosEst};
 }
 function irpfRate(y){
   const P = yr(y).pay;
@@ -783,7 +782,8 @@ function viewNom(){
     <tfoot><tr><td style="text-align:left">NET ESTIMAT DEL MES</td><td>${eur(M.net)}</td></tr></tfoot></table>
     ${String(P.irpfMode).toUpperCase().startsWith("A") ? `<div class="note">
       El tipus surt de les retribucions previsibles de l'any: <b>${eur(previsibles(y).total)} €</b>
-      (${anual.mesosAmbDades} ${anual.mesosAmbDades===1?"mes registrat":"mesos registrats"} + estimació des de l'inici del contracte).
+      (${previsibles(y).mesosReg} ${previsibles(y).mesosReg===1?"mes registrat":"mesos registrats"}
+       + ${previsibles(y).mesosEst} ${previsibles(y).mesosEst===1?"mes estimat":"mesos estimats"} de part fixa).
       ${M.tipus === 0 ? `<b style="color:var(--red)">Surt 0 % perquè encara no arriba al mínim exclòs de retenir
         (${eur((LIMITS[P.situacio]||LIMITS[3])[Math.min(+P.descend||0,2)])} €).</b> Amb pocs mesos entrats el net queda inflat:
         registra la resta de mesos, o posa el tipus a mà des dels paràmetres.` : ""}</div>` : ""}</div>
