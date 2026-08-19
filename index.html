@@ -149,6 +149,10 @@ td.dim{color:var(--tx3)}
 .stb.on{border-width:2px;padding:7px 5px}
 .hrow{display:flex;gap:6px;align-items:center}
 .hrow .fld{text-align:center;font-family:monospace;font-size:17px;font-weight:700}
+/* hora : minut, amb els dos desplegables junts */
+.hm{display:flex;align-items:center;gap:4px}
+.hm .fld{text-align:center;font-family:monospace;padding:7px 2px}
+.hm span{color:var(--tx3);font-weight:700}
 .hrow button{background:var(--bg2);border:1px solid var(--br2);border-radius:8px;width:42px;height:40px;font-size:17px;flex-shrink:0}
 .acts{display:flex;gap:7px;margin-top:16px}
 .acts .btn{flex:1;padding:10px}
@@ -614,16 +618,33 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 /* ── Desplegables ──
    Al mòbil el navegador els mostra com una roda; a l'ordinador estalvien haver
    d'escriure l'hora dígit a dígit. */
-function optsHora(sel, de=0, a=23, pas=15){
-  let o = `<option value=""${sel?"":" selected"}>—</option>`, trobat = false;
-  for(let h=de; h<=a; h++) for(let m=0; m<60; m+=pas){
-    const v = pad(h)+":"+pad(m);
-    if(v === sel) trobat = true;
-    o += `<option value="${v}"${v===sel?" selected":""}>${v}</option>`;
-  }
-  /* una hora desada que no caigui al pas (dades velles) no s'ha de perdre */
-  if(sel && !trobat) o += `<option value="${esc(sel)}" selected>${esc(sel)}</option>`;
+/* Hores i minuts en desplegables separats: l'hora de 00 a 23 i el minut de 0 a
+   59, perquè es pugui fitxar qualsevol moment i no només els quarts. */
+function optsUnitat(sel, max){
+  let o = `<option value=""${sel===""||sel==null?" selected":""}>—</option>`;
+  for(let v=0; v<=max; v++)
+    o += `<option value="${pad(v)}"${pad(v)===sel?" selected":""}>${pad(v)}</option>`;
   return o;
+}
+/** "07:30" → {h:"07", m:"30"}; buit → {h:"", m:""} */
+function parteixHora(s){
+  const x = /^(\d{1,2}):(\d{1,2})$/.exec(String(s||"").trim());
+  return x ? {h:pad(+x[1]), m:pad(+x[2])} : {h:"", m:""};
+}
+/** Munta "HH:MM"; sense hora no hi ha fitxatge, i el minut buit val 0. */
+const muntaHora = (h,m) => h === "" ? "" : pad(+h)+":"+pad(+m||0);
+/** Amb minuts lliures el total no cau en trams de 0,25 (07:07→16:43 són 9,10 h),
+    i assignar-lo a un <select> que no el té el deixaria buit. L'hi afegim. */
+function assegurarOpcio(sel, v){
+  if(v === "" || v == null) return;
+  const val = String(v);
+  if(![...sel.options].some(o => o.value === val)){
+    const o = document.createElement("option");
+    o.value = val; o.textContent = fmtH(+v) || "0";
+    const seg = [...sel.options].find(x => x.value !== "" && +x.value > +v);
+    sel.insertBefore(o, seg || null);
+  }
+  sel.value = val;
 }
 /* `desDe` evita repetir el zero quan l'opció buida ja vol dir zero */
 function optsNum(sel, max, pas=0.25, buit="—", desDe=0){
@@ -1013,6 +1034,7 @@ function openDay(d){
   SEL = {y,m,d};
   const t = dtype(y,m,d), r = rec(y,m,d) || {};
   const th = TYPES[t].h;
+  const HI = parteixHora(r.i), HF = parteixHora(r.f);
   const dests = [...new Set(Object.values(yr(y).days).map(x => x.d).filter(Boolean))].sort();
   const btns = Object.entries(STATES).map(([k,v]) =>
     `<button class="stb${r.s===k?" on":""}" data-s="${k}" style="${r.s===k?`border-color:var(${v.c});color:var(${v.c})`:""}">${v.l}<small>${v.s}</small></button>`).join("");
@@ -1023,15 +1045,21 @@ function openDay(d){
     <div class="lbl">Estat del dia</div>
     <div class="stbtns" id="stb">${btns}</div>
     <div class="lbl">Fitxatge</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      <div><select class="fld" id="iIn">${optsHora(r.i||"")}</select><div class="note">inici</div></div>
-      <div><select class="fld" id="fIn">${optsHora(r.f||"")}</select><div class="note">fi</div></div>
-      <div><select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select><div class="note">pausa (h)</div></div>
+    <div class="row2">
+      <div><div class="note" style="margin-bottom:3px">inici</div>
+        <div class="hm"><select class="fld" id="iH">${optsUnitat(HI.h,23)}</select>
+          <span>:</span><select class="fld" id="iM">${optsUnitat(HI.m,59)}</select></div></div>
+      <div><div class="note" style="margin-bottom:3px">fi</div>
+        <div class="hm"><select class="fld" id="fH">${optsUnitat(HF.h,23)}</select>
+          <span>:</span><select class="fld" id="fM">${optsUnitat(HF.m,59)}</select></div></div>
     </div>
+    <div style="margin-top:8px"><div class="note" style="margin-bottom:3px">pausa (h)</div>
+      <select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select></div>
     <div class="lbl">Hores fetes</div>
     <div class="hrow">
       <button id="hMinus">−</button>
-      <select class="fld" id="hIn">${optsNum(r.h!=null?r.h:"", 16, 0.25, "0", 0.25)}</select>
+      <select class="fld" id="hIn">${optsNum(r.h!=null&&Math.abs(r.h*4-Math.round(r.h*4))<1e-9?r.h:"", 16, 0.25, "0", 0.25)}${
+        r.h!=null&&Math.abs(r.h*4-Math.round(r.h*4))>=1e-9?`<option value="${r.h}" selected>${fmtH(r.h)}</option>`:""}</select>
       <button id="hPlus">+</button>
       <button class="btn sm" id="hTheo" style="width:auto;height:40px;padding:0 10px">${fmt(th||8)} h</button>
     </div>
@@ -1065,7 +1093,7 @@ function openDay(d){
   /* autoH = les hores del quadre les hem posat nosaltres, no l'usuari. En un rang,
      això vol dir «cada dia amb la seva jornada» en comptes d'un número fix. */
   let autoH = false;
-  const setAuto = v => { hIn.value = v; autoH = true; };
+  const setAuto = v => { assegurarOpcio(hIn, v); autoH = true; };
   ["input","change"].forEach(ev => hIn.addEventListener(ev, () => autoH = false));
   $("shX").onclick = closeSheet;
   $("stb").querySelectorAll(".stb").forEach(b => b.onclick = () => {
@@ -1078,7 +1106,7 @@ function openDay(d){
       else if(!hIn.value || autoH) setAuto(th || 8);
     }
   });
-  const step = k => { const v = Math.max(0, (+hIn.value||0) + k); hIn.value = v ? v : ""; autoH = false; };
+  const step = k => { const v = Math.max(0, r2((+hIn.value||0) + k)); if(v) assegurarOpcio(hIn, v); else hIn.value = ""; autoH = false; };
   $("hMinus").onclick = () => step(-0.25);
   $("hPlus").onclick  = () => step(0.25);
   $("hTheo").onclick  = () => setAuto(th || 8);
@@ -1087,15 +1115,21 @@ function openDay(d){
     b.classList.add("on");
   });
   /* el fitxatge mana sobre el camp d'hores: si hi ha inici i fi, el total surt d'aquí */
+  const llegeixFitxatge = () => ({
+    i: muntaHora($("iH").value, $("iM").value),
+    f: muntaHora($("fH").value, $("fM").value),
+    p: +$("pIn").value || 0
+  });
   const syncH = () => {
-    const v = horesDia({i:$("iIn").value, f:$("fIn").value, p:+$("pIn").value||0});
+    const F = llegeixFitxatge();
     const nota = $("hCalc");
-    if($("iIn").value && $("fIn").value){
-      hIn.value = v; autoH = false;
+    if(F.i && F.f){
+      const v = horesDia(F);
+      assegurarOpcio(hIn, v); autoH = false;
       nota.textContent = `Del fitxatge: ${fmt(v)} h`;
     } else nota.textContent = "";
   };
-  ["iIn","fIn","pIn"].forEach(id =>
+  ["iH","iM","fH","fM","pIn"].forEach(id =>
     ["input","change"].forEach(ev => $(id).addEventListener(ev, syncH)));
   obreCalendari($("untilIn"));
   syncH();
@@ -1103,8 +1137,9 @@ function openDay(d){
   $("shOk").onclick   = () => {
     const s = ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "";
     const h = +hIn.value || 0, dd = $("dIn").value.trim().toUpperCase(), n = $("nIn").value.trim();
+    const F = llegeixFitxatge();
     const extra = {
-      i: $("iIn").value || "", f: $("fIn").value || "", p: +$("pIn").value || 0,
+      i: F.i, f: F.f, p: F.p,
       prev: $("prevIn").value === "" ? null : +$("prevIn").value,
       km: +$("kmIn").value || 0,
       c: ($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P"
