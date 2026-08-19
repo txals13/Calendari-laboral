@@ -166,6 +166,7 @@ td.dim{color:var(--tx3)}
     <button class="tab active" data-v="cal">Calendari</button>
     <button class="tab" data-v="sum">Resum</button>
     <button class="tab" data-v="trv">Viatges</button>
+    <button class="tab" data-v="nom">Nòmina</button>
   </div>
   <div class="view" id="view"></div>
 </div>
@@ -202,12 +203,13 @@ const TYPES = {
   F:{h:0,l:"Festiu"}, B:{h:0,l:"Pont (vacances)"}, X:{h:0,l:"No laborable"}
 };
 const STATES = {
-  HQ :{l:"HQ",        s:"A la seu",         c:"--tx2"},
-  EST:{l:"Estranger", s:"Viatge fora",      c:"--orange"},
-  NAC:{l:"Nacional",  s:"Viatge estatal",   c:"--violet"},
-  POS:{l:"Possible",  s:"Viatge previst",   c:"--orange"},
-  VAC:{l:"Vacances",  s:"Consumeix bossa",  c:"--green"},
-  LD :{l:"Lliure d.", s:"Lliure disposició",c:"--cyan"}
+  HQ :{l:"HQ",        s:"A la seu",         c:"--tx2",    v:"-"},
+  EST:{l:"Estranger", s:"Viatge fora",      c:"--orange", v:"I"},
+  NAC:{l:"Nacional",  s:"Viatge estatal",   c:"--violet", v:"N"},
+  POS:{l:"Possible",  s:"Viatge previst",   c:"--orange", v:"-"},
+  VAC:{l:"Vacances",  s:"Consumeix bossa",  c:"--green",  v:"-"},
+  LD :{l:"Lliure d.", s:"Lliure disposició",c:"--cyan",   v:"-"},
+  DC :{l:"Descans c.",s:"Gasta bossa h.",   c:"--gold",   v:"-"}
 };
 const MONTHS = ["Gener","Febrer","Març","Abril","Maig","Juny","Juliol","Agost","Setembre","Octubre","Novembre","Desembre"];
 const MSHORT = ["GEN","FEB","MAR","ABR","MAI","JUN","JUL","AGO","SET","OCT","NOV","DES"];
@@ -216,6 +218,24 @@ const WDAYS  = ["dl","dt","dc","dj","dv","ds","dg"];
 /* ───────────────────────── Dades ───────────────────────── */
 const KEY = "cal_v1_data", KTHM = "cal_v1_thm", KTOK = "cal_v1_tok", KROOT = "cal_v1_root";
 const DEFCFG = () => ({vacH:144, ldH:12, carry:0, target:null});
+/* Paràmetres de nòmina — valors inicials presos del full ⚙️ Config del
+   simulador 2026. Tot el motor llegeix d'aquí: canviant un número es recalcula. */
+const DEFPAY = () => ({
+  salari:47000, pagues:14, horesAny:1746,
+  esmorzar:8, dinar:20, sopar:25, pernocta:30, capSetmana:50, kmEur:0.36,
+  intlLab:70, intlFest:100,
+  incrExtra:0.10, factCdS:1.5, factLab:1, hJornadaDescans:9, mesosCaducitat:2,
+  ssCC:0.047, ssAtur:0.0155, ssFP:0.001, ssMEI:0.0015,
+  ssExtra:0.047, forcaMajor:false, ssExtraFM:0.02, topall:5101.20,
+  solT1:0.0115, solT2:0.0125, solT3:0.0146, solLim1:0.10, solLim2:0.50, solTreb:0.1661,
+  mesosExtra:[5,11],           /* juny i desembre — amb 14 pagues, 12 + 2 extres */
+  irpfMode:"AUTO", irpfPct:0.1515, irpfAjust:0, irpfMin:0,
+  /* dades personals per a l'algoritme de retencions de l'AEAT */
+  situacio:3, edat:45, discap:0, ajudaTercers:false, descend:0, descend3:0, descend50:true,
+  ascend:0, ascend75:0, pensioConjuge:0, aliments:0, mobilitat:false,
+  contracteIni:"2026-06-09",
+  art7p:true, art7pSalari:true, art7pExtres:true, art7pDietes:true, art7pLimit:60100
+});
 let DB = {v:1, years:{}};
 let YEAR = 2026, MONTH = new Date().getMonth(), VIEW = "cal", SEL = null;
 
@@ -243,8 +263,12 @@ function yr(y){
   y = String(y);
   if(!DB.years[y]) DB.years[y] = {days:{}, cfg:DEFCFG()};
   const o = DB.years[y];
-  o.cfg = Object.assign(DEFCFG(), o.cfg||{});
   if(!o.days) o.days = {};
+  /* Completem les claus que faltin SENSE substituir l'objecte: hi ha codi que
+     en guarda la referència, i abans es quedava apuntant a una còpia òrfena. */
+  const fill = (dst, def) => { for(const k in def) if(!(k in dst)) dst[k] = def[k]; return dst; };
+  if(!o.cfg) o.cfg = {}; fill(o.cfg, DEFCFG());
+  if(!o.pay) o.pay = {}; fill(o.pay, DEFPAY());
   return o;
 }
 
@@ -307,7 +331,7 @@ function stats(y){
       if(t === "F") S.festius++;
       if(past) S.theoYTD += th;
       if(!r) continue;
-      const h = +r.h || 0;
+      const h = horesDia(r);   /* si hi ha fitxatge, mana el fitxatge */
       M.done += h; S.done += h;
       if(past) S.doneYTD += h;
       if(r.s){
@@ -343,15 +367,199 @@ function stats(y){
   return S;
 }
 
+/* ───────────────────────── Motor de nòmina ─────────────────────────
+   Port del simulador 2026 (⚙️ Config + fulls mensuals). Regla de fons: manen
+   les hores que escriu l'usuari. Les hores previstes de cada dia són un camp
+   editable; el calendari només hi posa el valor inicial. */
+const r2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const r4 = n => Math.round((n + Number.EPSILON) * 10000) / 10000;  /* els tipus van a 4 decimals */
+const hm2h = s => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s||"").trim()); return m ? (+m[1]) + (+m[2])/60 : null; };
+
+/** Hores fetes d'un dia: de l'inici/fi/pausa si n'hi ha, si no del camp d'hores. */
+function horesDia(r){
+  if(!r) return 0;
+  const a = hm2h(r.i), b = hm2h(r.f);
+  if(a != null && b != null){
+    let d = b - a; if(d < 0) d += 24;          /* torn que travessa la mitjanit */
+    return Math.max(0, r2(d - (+r.p || 0)));
+  }
+  return +r.h || 0;
+}
+/** Hores previstes: el que hagi escrit l'usuari; si no, la jornada del calendari. */
+const previstes = (y,m,d,r) => (r && r.prev != null && r.prev !== "") ? (+r.prev || 0) : theo(y,m,d);
+
+/** Càlcul d'un dia. `fest` (previstes = 0) marca cap de setmana o festiu. */
+function payDay(y,m,d,P){
+  const r = rec(y,m,d);
+  if(!r) return null;
+  const h = horesDia(r), prev = previstes(y,m,d,r), fest = prev === 0;
+  const extra = Math.max(0, r2(h - prev));
+  const via = (STATES[r.s]||{}).v || "-";
+  const descans = r.c === "D";                       /* extra compensada en descans */
+  let dieta = 0;
+  if(via === "I") dieta = fest ? P.intlFest : P.intlLab;
+  else if(via === "N") dieta = P.esmorzar + P.dinar + P.sopar
+                             + (fest ? P.capSetmana : P.pernocta) + (+r.km||0) * P.kmEur;
+  return {
+    d, h, prev, fest, extra, via, descans, dieta: r2(dieta),
+    extraPagada: descans ? 0 : extra,
+    generat: descans ? r2(extra * (fest ? P.factCdS : P.factLab)) : 0,
+    gaudit: r.s === "DC" ? prev : 0,
+    /* un dia compta per a la proporció de l'art. 7.p si és festiu/cap de setmana
+       o si hi has registrat hores; un laborable buit queda fora */
+    computable: fest || h > 0
+  };
+}
+
+/** Proporció ANUAL de dies internacionals. Es calcula directament dels registres,
+    sense passar per payMonth, perquè la paga extra la necessita i si no faríem
+    una crida circular. */
+function propAnual(y){
+  let comp = 0, intl = 0;
+  for(let m=0;m<12;m++) for(let d=1; d<=mlen(y,m); d++){
+    const r = rec(y,m,d); if(!r) continue;
+    const h = horesDia(r), prev = previstes(y,m,d,r);
+    if(!(prev === 0 || h > 0)) continue;
+    comp++;
+    if(((STATES[r.s]||{}).v || "-") === "I") intl++;
+  }
+  return comp > 0 ? intl / comp : 0;
+}
+
+/** Nòmina d'un mes. Reprodueix el bloc A–E dels fulls mensuals. */
+/* `noIrpf` talla la recursió: el tipus de retenció es calcula a partir de les
+   retribucions subjectes de tot l'any, que surten d'aquesta mateixa funció. */
+function payMonth(y,m,noIrpf){
+  const P = yr(y).pay;
+  const hOrd = P.horesAny > 0 ? P.salari / P.horesAny : 0;
+  const hExtra = hOrd * (1 + P.incrExtra);
+  const dies = [];
+  for(let d=1; d<=mlen(y,m); d++){ const x = payDay(y,m,d,P); if(x) dies.push(x); }
+
+  const sum = f => dies.reduce((a,x) => a + f(x), 0);
+  const M = {dies, hores:r2(sum(x=>x.h)), extraTot:r2(sum(x=>x.extra))};
+  M.salari    = r2(P.salari / P.pagues);
+  M.extraNacH = r2(sum(x => x.via !== "I" ? x.extraPagada : 0));
+  M.extraIntH = r2(sum(x => x.via === "I" ? x.extraPagada : 0));
+  M.extraNac  = r2(M.extraNacH * hExtra);
+  M.extraInt  = r2(M.extraIntH * hExtra);
+  M.dietaNac  = r2(sum(x => x.via === "N" ? x.dieta : 0));
+  M.dietaInt  = r2(sum(x => x.via === "I" ? x.dieta : 0));
+  /* paga extra: amb 14 pagues n'hi ha dues, i la seva part exempta va amb la
+     proporció ANUAL de dies internacionals, no la del mes (⚙️ Config B73) */
+  M.esExtra   = (P.mesosExtra||[]).includes(m);
+  M.pagaExtra = M.esExtra ? M.salari : 0;
+  M.brut      = r2(M.salari + M.pagaExtra + M.extraNac + M.extraInt + M.dietaNac + M.dietaInt);
+
+  /* B — exempció art. 7.p */
+  M.diesComp = dies.filter(x => x.computable).length;
+  M.diesIntl = dies.filter(x => x.computable && x.via === "I").length;
+  M.propIntl = M.diesComp > 0 ? M.diesIntl / M.diesComp : 0;
+  const on = P.art7p;
+  M.exSalari = on && P.art7pSalari ? r2(M.salari * M.propIntl) : 0;
+  M.exExtres = on && P.art7pExtres ? M.extraInt : 0;
+  M.exDietes = on && P.art7pDietes ? M.dietaInt : 0;
+  M.exPaga   = on && P.art7pSalari && M.pagaExtra ? r2(M.pagaExtra * propAnual(y)) : 0;
+  M.exempt   = r2(M.exSalari + M.exExtres + M.exDietes + M.exPaga);
+  M.subjecte = r2(M.brut - M.exempt);
+
+  /* C — Seguretat Social. Les bases parteixen del salari anual/12, no de la
+     paga de 14: és el prorrateig de cotització. Les h.extres queden fora de la
+     base de contingències comunes i tenen la seva pròpia quota addicional. */
+  const base = P.salari / 12, extres = M.extraNac + M.extraInt, dietes = M.dietaNac + M.dietaInt;
+  M.bcc = Math.min(P.topall, r2(base + dietes));
+  M.bcp = Math.min(P.topall, r2(base + dietes + extres));
+  M.ssCC = -r2(M.bcc * P.ssCC);
+  M.ssMEI= -r2(M.bcc * P.ssMEI);
+  M.ssAtur = -r2(M.bcp * P.ssAtur);
+  M.ssFP = -r2(M.bcp * P.ssFP);
+  M.ssExtra = -r2(extres * (P.forcaMajor ? P.ssExtraFM : P.ssExtra));
+  M.exces = Math.max(0, r2(base + dietes + extres - P.topall));
+  const t1 = P.solLim1 * P.topall, t2 = P.solLim2 * P.topall;
+  M.ssSolid = -r2((Math.min(M.exces, t1) * P.solT1
+                 + Math.min(Math.max(0, M.exces - t1), t2 - t1) * P.solT2
+                 + Math.max(0, M.exces - t2) * P.solT3) * P.solTreb);
+  M.ss = r2(M.ssCC + M.ssMEI + M.ssAtur + M.ssFP + M.ssExtra + M.ssSolid);
+
+  /* D — IRPF */
+  M.tipus = noIrpf ? 0 : irpfRate(y);
+  M.irpf  = -r2(M.subjecte * M.tipus);
+  M.net   = r2(M.brut + M.ss + M.irpf);
+
+  /* E — bossa d'hores de descans */
+  M.generat = r2(sum(x => x.generat));
+  M.gaudit  = r2(sum(x => x.gaudit));
+  M.jornades = P.hJornadaDescans > 0 ? r2(M.generat / P.hJornadaDescans) : 0;
+  return M;
+}
+
+/* ── IRPF: algoritme de retencions de l'AEAT (arts. 80-87 RIRPF) ── */
+const ESCALA = [[0,12450,.19],[12450,20200,.24],[20200,35200,.30],[35200,60000,.37],[60000,300000,.45],[300000,1/0,.47]];
+const LIMITS = {1:[0,17644,18694], 2:[17197,18130,19262], 3:[15876,16342,16867]};
+function quotaEscala(base){
+  let q = 0;
+  for(const [de,a,t] of ESCALA){ if(base <= de) break; q += (Math.min(base,a) - de) * t; }
+  return r2(q);
+}
+/** Retribucions subjectes previsibles de l'any: el que hi ha registrat, més una
+    estimació dels mesos des de l'inici del contracte que encara no tenen dades. */
+function previsibles(y){
+  const P = yr(y).pay;
+  let reg = 0, regSS = 0, primerMes = null;
+  for(let m=0;m<12;m++){
+    const M = payMonth(y,m,true);
+    if(M.dies.length){ reg += M.subjecte; regSS += -M.ss; if(primerMes === null) primerMes = m; }
+  }
+  let estim = 0;
+  const ini = new Date(P.contracteIni + "T00:00:00");
+  if(!isNaN(ini) && primerMes !== null){
+    const fi = new Date(y, primerMes, 1);
+    const dies = Math.max(0, Math.round((fi - ini) / 864e5));
+    estim = r2(P.salari / 365 * dies);
+  }
+  /* SS previsible: la real dels mesos registrats + el tipus pla sobre l'estimació */
+  const ss = r2(regSS + estim * (P.ssCC + P.ssAtur + P.ssFP + P.ssMEI));
+  return {reg: r2(reg), estim, total: r2(reg + estim), ss};
+}
+function irpfRate(y){
+  const P = yr(y).pay;
+  if(String(P.irpfMode).toUpperCase().startsWith("M")) return +P.irpfPct || 0;
+  const pv = previsibles(y), prev = pv.total;
+  if(prev <= 0) return 0;
+  const ss = pv.ss;
+  const despeses = 2000 + (P.mobilitat ? 2000 : 0);
+  const net = Math.max(0, r2(prev - ss - despeses));
+  const red = net <= 14852 ? 7302 : net < 19747.5 ? Math.max(0, r2(7302 - 1.75*(net-14852))) : 0;
+  const baseRet = Math.max(0, r2(net - red - (+P.pensioConjuge||0)));
+  const minPers = 5550 + (P.edat>=65?1150:0) + (P.edat>=75?1400:0);
+  const nd = +P.descend||0;
+  const minDesc = ((nd>=1?2400:0)+(nd>=2?2700:0)+(nd>=3?4000:0)+(nd>=4?(nd-3)*4500:0)
+                  + (+P.descend3||0)*2800) * (P.descend50 ? .5 : 1);
+  const minAsc = (+P.ascend||0)*1150 + (+P.ascend75||0)*1400;
+  const minDis = (P.discap>=65?9000:P.discap>=33?3000:0) + ((P.ajudaTercers && P.discap>=33)?3000:0);
+  const minim = r2(minPers + minDesc + minAsc + minDis);
+  const alim = Math.min(baseRet, +P.aliments||0);
+  const minAjust = minim + ((+P.aliments||0) > 0 ? 1980 : 0);
+  const quota = Math.max(0, r2(quotaEscala(baseRet - alim) + quotaEscala(alim) - quotaEscala(minAjust)));
+  const excl = (LIMITS[P.situacio] || LIMITS[3])[Math.min(nd,2)];
+  if(prev <= excl) return 0;
+  const limit = Math.max(0, r2(0.43 * (prev - excl)));
+  const tipus = r4(Math.min(quota, limit) / prev);
+  return Math.max(+P.irpfMin||0, Math.min(0.47, r4(tipus + (+P.irpfAjust||0))));
+}
+
 /* ───────────────────────── Render ───────────────────────── */
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 function render(){
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.v === VIEW));
-  $("view").innerHTML = '<div class="wrap">' + (VIEW === "cal" ? viewCal() : VIEW === "sum" ? viewSum() : viewTrv()) + '</div>';
+  const body = VIEW === "cal" ? viewCal() : VIEW === "sum" ? viewSum()
+             : VIEW === "trv" ? viewTrv() : viewNom();
+  $("view").innerHTML = '<div class="wrap">' + body + '</div>';
   if(VIEW === "cal") wireCal();
   if(VIEW === "sum") wireCharts();
+  if(VIEW === "nom") wireNom();
 }
 
 /* ── Calendari ── */
@@ -365,7 +573,8 @@ function viewCal(){
     const cls = ["day","act"];
     if(r && r.s) cls.push("s-"+r.s); else if(t==="X"||t==="F"||t==="B") cls.push("t-"+t);
     if(today.getFullYear()===y && today.getMonth()===m && today.getDate()===d) cls.push("today");
-    const h = r && +r.h ? fmtH(+r.h)+"h" : fmtH(TYPES[t].h);
+    const hh = horesDia(r);
+    const h = hh ? fmtH(hh)+"h" : fmtH(TYPES[t].h);
     const tag = r && r.d ? esc(r.d) : (r && r.s ? r.s.slice(0,3) : "");
     cells += `<div class="${cls.join(" ")}" data-d="${d}">`
            + (tag ? `<span class="tag">${tag}</span>` : "")
@@ -486,6 +695,124 @@ function viewTrv(){
   </div>`;
 }
 
+/* ── Nòmina ── */
+const eur = n => (Math.round(n*100)/100).toLocaleString("ca-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+function viewNom(){
+  const y = YEAR, m = MONTH, P = yr(y).pay, M = payMonth(y,m);
+  const li = (l,v,cls,ind) => `<tr><td style="text-align:left${ind?";padding-left:16px":""}"${ind?' class="dim"':''}>${l}</td><td class="${cls||""}">${v}</td></tr>`;
+  const hOrd = P.horesAny>0 ? P.salari/P.horesAny : 0;
+  if(!M.dies.length) return `
+    ${nomNav(y,m)}
+    <div class="card"><div class="card-t">${MONTHS[m]} ${y}</div>
+      <div class="note">Cap dia registrat aquest mes. Fitxa les hores a la pestanya Calendari i aquí hi sortirà la nòmina.</div>
+      <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div></div>`;
+  const anual = payYear(y);
+  return `
+  ${nomNav(y,m)}
+  <div class="kpis" style="margin-bottom:10px">
+    <div class="kpi hero"><div class="k">Net estimat (€)</div><div class="v">${eur(M.net)}</div>
+      <div class="s">brut ${eur(M.brut)} · SS ${eur(M.ss)} · IRPF ${eur(M.irpf)}</div></div>
+    <div class="kpi"><div class="k">Exempt art. 7.p (€)</div><div class="v">${eur(M.exempt)}</div>
+      <div class="s">${M.diesIntl} de ${M.diesComp} dies computables (${fmt(M.propIntl*100)} %)</div></div>
+    <div class="kpi"><div class="k">Hores extres</div><div class="v">${fmt(M.extraTot)}</div>
+      <div class="s">${fmt(M.extraNacH+M.extraIntH)} pagades · ${fmt(M.generat)} h a la bossa</div></div>
+  </div>
+  <div class="card"><div class="card-t">A · Meritació bruta</div><table>
+    ${li("Salari de la paga mensual", eur(M.salari))}
+    ${M.pagaExtra ? li("Paga extra", eur(M.pagaExtra)) : ""}
+    ${li("H. extres pagades — dies nacionals", eur(M.extraNac))}
+    ${li("H. extres pagades — dies internacionals", eur(M.extraInt))}
+    ${li("Dietes nacionals", eur(M.dietaNac))}
+    ${li("Dietes internacionals", eur(M.dietaInt))}
+    <tfoot><tr><td style="text-align:left">TOTAL BRUT</td><td>${eur(M.brut)}</td></tr></tfoot></table>
+    <div class="note">Hora ordinària ${eur(hOrd)} €/h · hora extra ${eur(hOrd*(1+P.incrExtra))} €/h</div></div>
+  <div class="card"><div class="card-t">B · Exempció art. 7.p</div><table>
+    ${li("Dies computables", M.diesComp)}
+    ${li("Dies internacionals", M.diesIntl)}
+    ${li("Proporció", fmt(M.propIntl*100)+" %")}
+    ${li("Exempt — salari proporcional", eur(M.exSalari), "", 1)}
+    ${li("Exempt — h. extres internacionals", eur(M.exExtres), "", 1)}
+    ${li("Exempt — dietes internacionals", eur(M.exDietes), "", 1)}
+    ${M.exPaga ? li("Exempt — paga extra (proporció anual)", eur(M.exPaga), "", 1) : ""}
+    ${li("Σ exempt", eur(M.exempt))}
+    <tfoot><tr><td style="text-align:left">SUBJECTE A IRPF</td><td>${eur(M.subjecte)}</td></tr></tfoot></table></div>
+  <div class="card"><div class="card-t">C · Seguretat Social</div><table>
+    ${li("Base contingències comunes", eur(M.bcc), "dim")}
+    ${li("Base contingències professionals", eur(M.bcp), "dim")}
+    ${li("Contingències comunes", eur(M.ssCC), "neg", 1)}
+    ${li("MEI", eur(M.ssMEI), "neg", 1)}
+    ${li("Desocupació", eur(M.ssAtur), "neg", 1)}
+    ${li("Formació professional", eur(M.ssFP), "neg", 1)}
+    ${li("Addicional per h. extres", eur(M.ssExtra), "neg", 1)}
+    ${li("Solidaritat" + (M.exces?" (excés "+eur(M.exces)+")":""), eur(M.ssSolid), "neg", 1)}
+    <tfoot><tr><td style="text-align:left">Σ SEGURETAT SOCIAL</td><td class="neg">${eur(M.ss)}</td></tr></tfoot></table></div>
+  <div class="card"><div class="card-t">D · IRPF i net</div><table>
+    ${li("Tipus de retenció", fmt(M.tipus*100)+" %"+(String(P.irpfMode).toUpperCase().startsWith("M")?" (manual)":" (auto)"))}
+    ${li("Base de retenció", eur(M.subjecte), "dim")}
+    ${li("IRPF retingut", eur(M.irpf), "neg")}
+    <tfoot><tr><td style="text-align:left">NET ESTIMAT DEL MES</td><td>${eur(M.net)}</td></tr></tfoot></table>
+    ${String(P.irpfMode).toUpperCase().startsWith("A") ? `<div class="note">
+      El tipus surt de les retribucions previsibles de l'any: <b>${eur(previsibles(y).total)} €</b>
+      (${anual.mesosAmbDades} ${anual.mesosAmbDades===1?"mes registrat":"mesos registrats"} + estimació des de l'inici del contracte).
+      ${M.tipus === 0 ? `<b style="color:var(--red)">Surt 0 % perquè encara no arriba al mínim exclòs de retenir
+        (${eur((LIMITS[P.situacio]||LIMITS[3])[Math.min(+P.descend||0,2)])} €).</b> Amb pocs mesos entrats el net queda inflat:
+        registra la resta de mesos, o posa el tipus a mà des dels paràmetres.` : ""}</div>` : ""}</div>
+  <div class="card"><div class="card-t">E · Bossa d'hores de descans</div><table>
+    ${li("Generades aquest mes", fmt(M.generat)+" h")}
+    ${li("equivalents a jornades", fmt(M.jornades), "dim", 1)}
+    ${li("Gaudides aquest mes (dies DC)", fmt(M.gaudit)+" h")}
+    ${li("Caducades aquest mes", fmt(anual.caducat[m])+" h", anual.caducat[m]?"neg":"dim")}
+    <tfoot><tr><td style="text-align:left">SALDO PENDENT</td><td>${fmt(anual.saldo[m])} h</td></tr></tfoot></table>
+    <div class="note">Les hores generades caduquen si no es gaudeixen dins dels ${P.mesosCaducitat} mesos següents. Imputació FIFO: primer es gasten les més antigues.</div></div>
+  <div class="card"><div class="card-t">Any ${y}</div><table>
+    ${li("Brut meritat", eur(anual.brut))}
+    ${li("Exempt art. 7.p acumulat", eur(anual.exempt) + " / " + eur(P.art7pLimit),
+         anual.exempt > P.art7pLimit ? "neg" : "")}
+    ${li("Retribució subjecta", eur(anual.subjecte))}
+    ${li("Seguretat Social", eur(anual.ss), "neg")}
+    ${li("IRPF", eur(anual.irpf), "neg")}
+    <tfoot><tr><td style="text-align:left">NET ACUMULAT</td><td>${eur(anual.net)}</td></tr></tfoot></table>
+    ${anual.exempt > P.art7pLimit ? '<div class="note"><b style="color:var(--red)">Límit de l\'art. 7.p superat.</b> L\'excés per damunt de '+eur(P.art7pLimit)+' € tributa.</div>' : ""}
+    <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div></div>`;
+}
+function nomNav(y,m){
+  return `<div class="mnav">
+    <button id="nPrev">‹</button>
+    <div class="mtitle">${MONTHS[m].toUpperCase()} ${y}</div>
+    <button id="nNext">›</button></div>`;
+}
+function wireNom(){
+  if($("nPrev")) $("nPrev").onclick = () => { MONTH--; if(MONTH<0){MONTH=11; YEAR--; syncYearSel();} render(); };
+  if($("nNext")) $("nNext").onclick = () => { MONTH++; if(MONTH>11){MONTH=0; YEAR++; syncYearSel();} render(); };
+  if($("payCfg")) $("payCfg").onclick = openPay;
+}
+/** Totals de l'any i bossa d'hores amb imputació FIFO i caducitat. */
+function payYear(y){
+  const P = yr(y).pay, ms = [];
+  for(let m=0;m<12;m++) ms.push(payMonth(y,m));
+  const A = {brut:0, exempt:0, subjecte:0, ss:0, irpf:0, net:0,
+             saldo:Array(12).fill(0), caducat:Array(12).fill(0), mesos:ms};
+  /* només compten els mesos amb dies registrats: si no, cada mes buit hi sumaria
+     igualment el salari fix i el total anual sortiria inflat */
+  ms.forEach(M => { if(!M.dies.length) return;
+                    A.brut+=M.brut; A.exempt+=M.exempt; A.subjecte+=M.subjecte;
+                    A.ss+=M.ss; A.irpf+=M.irpf; A.net+=M.net; });
+  A.mesosAmbDades = ms.filter(M => M.dies.length).length;
+  ["brut","exempt","subjecte","ss","irpf","net"].forEach(k => A[k] = r2(A[k]));
+  /* FIFO: cada mes gasta primer les hores més antigues encara vives */
+  const lots = [];                        /* {mes, h} pendents */
+  for(let m=0;m<12;m++){
+    let cal = ms[m].gaudit;
+    for(const L of lots){ if(cal <= 0) break; const u = Math.min(L.h, cal); L.h -= u; cal -= u; }
+    let cad = 0;
+    for(const L of lots) if(m - L.mes >= P.mesosCaducitat && L.h > 0){ cad += L.h; L.h = 0; }
+    A.caducat[m] = r2(cad);
+    if(ms[m].generat > 0) lots.push({mes:m, h:ms[m].generat});
+    A.saldo[m] = r2(lots.reduce((a,L) => a + L.h, 0));
+  }
+  return A;
+}
+
 /* ───────────────────────── Gràfics ───────────────────────── */
 const CH = {w:720, h:230, l:38, r:12, t:14, b:26};
 function niceMax(v){
@@ -587,12 +914,30 @@ function openDay(d){
     <div class="sh-sub">${TYPES[t].l}${th?" · "+fmt(th)+" h teòriques":" · sense jornada"}</div>
     <div class="lbl">Estat del dia</div>
     <div class="stbtns" id="stb">${btns}</div>
+    <div class="lbl">Fitxatge</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div><input class="fld" id="iIn" type="time" value="${esc(r.i||"")}"><div class="note">inici</div></div>
+      <div><input class="fld" id="fIn" type="time" value="${esc(r.f||"")}"><div class="note">fi</div></div>
+      <div><input class="fld" id="pIn" type="number" step="0.25" min="0" max="8" value="${r.p!=null?r.p:""}" placeholder="0"><div class="note">pausa (h)</div></div>
+    </div>
     <div class="lbl">Hores fetes</div>
     <div class="hrow">
       <button id="hMinus">−</button>
       <input class="fld" id="hIn" type="number" step="0.25" min="0" max="24" value="${r.h!=null?r.h:""}" placeholder="0">
       <button id="hPlus">+</button>
       <button class="btn sm" id="hTheo" style="width:auto;height:40px;padding:0 10px">${fmt(th||8)} h</button>
+    </div>
+    <div class="note" id="hCalc"></div>
+    <div class="row2">
+      <div><div class="lbl">Hores previstes</div>
+        <input class="fld" id="prevIn" type="number" step="0.25" min="0" max="24" value="${r.prev!=null?r.prev:""}" placeholder="${fmt(th)}"></div>
+      <div><div class="lbl">Km vehicle propi</div>
+        <input class="fld" id="kmIn" type="number" step="1" min="0" value="${r.km!=null?r.km:""}" placeholder="0"></div>
+    </div>
+    <div class="lbl">Hores extres d'aquest dia</div>
+    <div class="stbtns" id="cmp" style="grid-template-columns:1fr 1fr">
+      <button class="stb${r.c!=="D"?" on":""}" data-c="P">Pagades<small>+${fmt((yr(y).pay.incrExtra||0)*100)} %</small></button>
+      <button class="stb${r.c==="D"?" on":""}" data-c="D">En descans<small>a la bossa d'hores</small></button>
     </div>
     <div class="row2">
       <div><div class="lbl">Destinació</div>
@@ -629,12 +974,33 @@ function openDay(d){
   $("hMinus").onclick = () => step(-0.25);
   $("hPlus").onclick  = () => step(0.25);
   $("hTheo").onclick  = () => setAuto(th || 8);
+  $("cmp").querySelectorAll(".stb").forEach(b => b.onclick = () => {
+    $("cmp").querySelectorAll(".stb").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+  });
+  /* el fitxatge mana sobre el camp d'hores: si hi ha inici i fi, el total surt d'aquí */
+  const syncH = () => {
+    const v = horesDia({i:$("iIn").value, f:$("fIn").value, p:+$("pIn").value||0});
+    const nota = $("hCalc");
+    if($("iIn").value && $("fIn").value){
+      hIn.value = v; autoH = false;
+      nota.textContent = `Del fitxatge: ${fmt(v)} h`;
+    } else nota.textContent = "";
+  };
+  ["iIn","fIn","pIn"].forEach(id => $(id).addEventListener("input", syncH));
+  syncH();
   $("shDel").onclick  = () => { applyRange(null); };
   $("shOk").onclick   = () => {
     const s = ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "";
     const h = +hIn.value || 0, dd = $("dIn").value.trim().toUpperCase(), n = $("nIn").value.trim();
-    if(!s && !h && !dd && !n) return applyRange(null);
-    applyRange({s, h, d:dd, n, auto: autoH && h > 0});
+    const extra = {
+      i: $("iIn").value || "", f: $("fIn").value || "", p: +$("pIn").value || 0,
+      prev: $("prevIn").value === "" ? null : +$("prevIn").value,
+      km: +$("kmIn").value || 0,
+      c: ($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P"
+    };
+    if(!s && !h && !dd && !n && !extra.i && !extra.km && extra.prev === null) return applyRange(null);
+    applyRange({s, h, d:dd, n, auto: autoH && h > 0, extra});
   };
 }
 function applyRange(val){
@@ -667,6 +1033,16 @@ function applyRange(val){
     if(h) v.h = h;
     if(val.d) v.d = val.d;
     if(val.n && o === from) v.n = val.n;
+    const E = val.extra;
+    if(E){
+      /* el fitxatge concret és del dia que has obert; en la resta del rang només
+         s'hi repeteix si aquell dia té jornada, i les hores previstes són les seves */
+      if(o === from){ if(E.i) v.i = E.i; if(E.f) v.f = E.f; if(E.p) v.p = E.p;
+                      if(E.prev !== null) v.prev = E.prev; }
+      else if(E.i && TYPES[t].h > 0){ v.i = E.i; if(E.f) v.f = E.f; if(E.p) v.p = E.p; }
+      if(E.km) v.km = E.km;
+      if(E.c === "D") v.c = "D";
+    }
     setRec(y,mm,dd, Object.keys(v).length ? v : null);
   }
   closeSheet(); render();
@@ -748,6 +1124,73 @@ function openCfg(){
   $("wipe").onclick = () => {
     if(!confirm("Esborrar totes les marques del "+y+"? Els ajustos es mantenen.")) return;
     yr(y).days = {}; save(); closeSheet(); render();
+  };
+}
+/* ── Paràmetres de nòmina ── */
+const PAYFIELDS = [
+  ["Salari i jornada", [["salari","Salari brut anual (€)",1],["pagues","Nº pagues",1],["horesAny","Hores anuals conveni",1]]],
+  ["Dietes nacionals (€)", [["esmorzar","Esmorzar",.01],["dinar","Dinar",.01],["sopar","Sopar",.01],
+     ["pernocta","Compl. pernocta",.01],["capSetmana","Compl. cap de setmana/festiu",.01],["kmEur","€ per km",.01]]],
+  ["Dietes internacionals (€)", [["intlLab","Dia laborable",.01],["intlFest","Dia cap de setmana/festiu",.01]]],
+  ["Hores extres", [["incrExtra","Increment sobre l'hora ordinària",.01],
+     ["factCdS","Factor descans en cap de setmana/festiu",.1],["factLab","Factor descans en laborable",.1],
+     ["hJornadaDescans","Hores per 1 jornada de descans",.25],["mesosCaducitat","Mesos per gaudir-les",1]]],
+  ["Seguretat Social", [["ssCC","Contingències comunes",.0001],["ssAtur","Desocupació",.0001],
+     ["ssFP","Formació professional",.0001],["ssMEI","MEI",.0001],["ssExtra","H. extres ordinàries",.0001],
+     ["ssExtraFM","H. extres força major",.0001],["topall","Topall base mensual (€)",.01]]],
+  ["Cotització de solidaritat", [["solT1","Tram 1",.0001],["solT2","Tram 2",.0001],["solT3","Tram 3",.0001],
+     ["solLim1","Límit tram 1 (× base)",.01],["solLim2","Límit tram 2 (× base)",.01],["solTreb","Part del treballador",.0001]]],
+  ["IRPF", [["irpfPct","% manual (si el mode és MANUAL)",.0001],["irpfAjust","Ajust voluntari (punts)",.0001],
+     ["irpfMin","Tipus mínim forçat",.0001]]],
+  ["Dades personals (per al càlcul automàtic)", [["situacio","Situació familiar (1/2/3)",1],["edat","Edat",1],
+     ["discap","Grau de discapacitat (%)",1],["descend","Descendents",1],["descend3","dels quals < 3 anys",1],
+     ["ascend","Ascendents > 65",1],["ascend75","dels quals > 75",1],
+     ["pensioConjuge","Pensió compensatòria (€/any)",.01],["aliments","Anualitats per aliments (€/any)",.01]]],
+  ["Art. 7.p", [["art7pLimit","Límit anual exempt (€)",.01]]]
+];
+function openPay(){
+  const y = YEAR, P = yr(y).pay, pv = previsibles(y);
+  const grp = PAYFIELDS.map(([tit,fs]) => `<div class="lbl">${tit}</div><div class="row2">`
+    + fs.map(([k,l,st]) => `<div><div class="note" style="margin:0 0 3px">${l}</div>`
+        + `<input class="fld pf" data-k="${k}" type="number" step="${st}" value="${P[k]}"></div>`).join("")
+    + `</div>`).join("");
+  const sw = (k,l) => `<button class="stb pb${P[k]?" on":""}" data-b="${k}" style="${P[k]?"border-color:var(--gold);color:var(--gold)":""}">${l}<small>${P[k]?"sí":"no"}</small></button>`;
+  openSheet(`
+    <div class="sh-hdr"><div class="sh-t">Paràmetres de nòmina — ${y}</div><button class="btn sm" id="shX">✕</button></div>
+    <div class="sh-sub">Tipus IRPF actual ${fmt(irpfRate(y)*100)} % · previsibles ${eur(pv.total)} € (${eur(pv.reg)} registrats + ${eur(pv.estim)} estimats)</div>
+    <div class="lbl">Mode d'IRPF</div>
+    <div class="stbtns" id="irpfMode">
+      <button class="stb${String(P.irpfMode).toUpperCase().startsWith("A")?" on":""}" data-m="AUTO">AUTO<small>algoritme AEAT</small></button>
+      <button class="stb${String(P.irpfMode).toUpperCase().startsWith("M")?" on":""}" data-m="MANUAL">MANUAL<small>el % de sota</small></button>
+    </div>
+    <div class="lbl">Interruptors</div>
+    <div class="stbtns" id="payBool">
+      ${sw("art7p","Art. 7.p")}${sw("art7pSalari","Exempt salari")}${sw("art7pExtres","Exempt extres")}
+      ${sw("art7pDietes","Exempt dietes")}${sw("forcaMajor","Extres força major")}
+      ${sw("descend50","Mínim descend. 50%")}${sw("ajudaTercers","Ajuda de tercers")}${sw("mobilitat","Mobilitat geogràfica")}
+    </div>
+    <div class="lbl">Inici del contracte</div>
+    <input class="fld" id="pIni" type="date" value="${esc(P.contracteIni||"")}">
+    ${grp}
+    <div class="note">Els percentatges s'escriuen en tant per u: 0,047 és el 4,70 %. Valors inicials presos del full ⚙️ Config del simulador 2026.</div>
+    <div class="acts"><button class="btn pri" id="shOk">Desa</button></div>`);
+  $("shX").onclick = closeSheet;
+  $("irpfMode").querySelectorAll(".stb").forEach(b => b.onclick = () => {
+    $("irpfMode").querySelectorAll(".stb").forEach(x => x.classList.remove("on")); b.classList.add("on");
+  });
+  $("payBool").querySelectorAll(".pb").forEach(b => b.onclick = () => {
+    const on = b.classList.toggle("on");
+    b.style.borderColor = on ? "var(--gold)" : ""; b.style.color = on ? "var(--gold)" : "";
+    b.querySelector("small").textContent = on ? "sí" : "no";
+  });
+  $("shOk").onclick = () => {
+    const P2 = yr(y).pay;
+    $("sheet").querySelectorAll(".pf").forEach(i => { if(i.value !== "") P2[i.dataset.k] = +i.value; });
+    $("payBool").querySelectorAll(".pb").forEach(b => P2[b.dataset.b] = b.classList.contains("on"));
+    P2.irpfMode = ($("irpfMode").querySelector(".stb.on")||{dataset:{}}).dataset.m || "AUTO";
+    P2.contracteIni = $("pIni").value || P2.contracteIni;
+    yr(y).cfgT = Date.now();
+    save(); closeSheet(); render();
   };
 }
 function dl(name, text, mime){

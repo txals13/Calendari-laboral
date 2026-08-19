@@ -11,8 +11,41 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
 - **Resum** — saldo de l'any i saldo fins avui, vacances restants, hores per mes
   i detall mensual.
 - **Viatges** — dies i hores per destinació, i les estades amb el seu període.
+- **Nòmina** — meritació bruta, exempció de l'art. 7.p, Seguretat Social, IRPF i
+  net estimat del mes, més la bossa d'hores de descans i el total de l'any.
 - **⚙️** — bossa de vacances, romanent de l'any anterior, lliure disposició,
   objectiu manual, i exportació/importació de dades.
+
+## Nòmina
+
+Port del simulador `2026_Nomina_Prodec_v3.xlsx`. Tots els paràmetres són a
+**Nòmina → Paràmetres de nòmina**, amb els valors inicials del full ⚙️ Config:
+salari i pagues, dietes nacionals i internacionals, increment d'hores extres,
+quotes de la Seguretat Social, cotització de solidaritat, i els interruptors de
+l'art. 7.p. Els percentatges s'escriuen en tant per u (0,047 = 4,70 %).
+
+**Les hores extres surten de `hores fetes − hores previstes`.** Les fetes són el
+teu fitxatge (inici/fi/pausa; si no en poses, val el camp d'hores). Les previstes
+són **un camp editable a cada dia**: el calendari només hi posa el valor inicial,
+i si l'escrius tu mana el teu número. La nòmina no depèn, doncs, que el calendari
+sigui correcte.
+
+Cada dia pots marcar si les extres es **paguen** (+10 %) o van **a la bossa de
+descans** (×1,5 en cap de setmana o festiu, ×1 en laborable). L'estat **Descans c.**
+gasta hores de la bossa. La imputació és FIFO i caduca als 2 mesos.
+
+L'**IRPF** té dos modes. `AUTO` reprodueix l'algoritme de retencions de l'AEAT a
+partir de les retribucions previsibles de l'any: els mesos que tinguis registrats
+més una estimació des de l'inici del contracte. Amb pocs mesos entrats el tipus
+pot sortir 0 % perquè encara no arriba al mínim exclòs de retenir — l'app t'ho
+avisa. `MANUAL` aplica el percentatge que hi posis.
+
+> Validat contra el full: el setembre dóna brut 3.357,14 → SS −254,59 →
+> IRPF −508,61 → **net 2.593,94 €**, i el tipus automàtic amb els cinc mesos
+> registrats dóna **15,15 %** amb previsibles de 26.967,50 €, idèntic al llibre.
+
+⚠️ És una **estimació**. La liquidació definitiva es fa a la declaració de la
+renda; contrasta-la amb el teu assessor.
 
 ## Sincronització entre dispositius
 
