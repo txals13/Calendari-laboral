@@ -34,6 +34,12 @@ Cada dia pots marcar si les extres es **paguen** (+10 %) o van **a la bossa de
 descans** (×1,5 en cap de setmana o festiu, ×1 en laborable). L'estat **Descans c.**
 gasta hores de la bossa. La imputació és FIFO i caduca als 2 mesos.
 
+**Mesos d'alta parcial.** El període de contracte es posa als paràmetres (inici i,
+si escau, fi). El mes en què entres o surts no cobra sencer: el salari, la base de
+cotització i el topall van prorratejats per dies naturals, i les pagues extres pels
+dies d'alta de l'any. Amb l'alta el 24 d'agost, l'agost cobra 8/31 del salari i el
+juliol no cobra res.
+
 L'**IRPF** té dos modes. `AUTO` reprodueix l'algoritme de retencions de l'AEAT a
 partir de les retribucions previsibles de l'any: els mesos que tinguis registrats
 més una estimació des de l'inici del contracte. Amb pocs mesos entrats el tipus

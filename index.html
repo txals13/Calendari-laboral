@@ -233,7 +233,7 @@ const DEFPAY = () => ({
   /* dades personals per a l'algoritme de retencions de l'AEAT */
   situacio:3, edat:45, discap:0, ajudaTercers:false, descend:0, descend3:0, descend50:true,
   ascend:0, ascend75:0, pensioConjuge:0, aliments:0, mobilitat:false,
-  contracteIni:"2026-06-09",
+  contracteIni:"2026-08-24", contracteFi:"",
   art7p:true, art7pSalari:true, art7pExtres:true, art7pDietes:true, art7pLimit:60100
 });
 let DB = {v:1, years:{}};
@@ -411,6 +411,26 @@ function payDay(y,m,d,P){
   };
 }
 
+/** Dies naturals d'un mes dins del període de contracte. Un mes d'alta parcial
+    —comences el 24 d'agost— no cobra el mes sencer: es prorrateja per dies. */
+function diesAlta(y,m,P){
+  const n = mlen(y,m);
+  const ini = P.contracteIni ? new Date(P.contracteIni+"T00:00:00") : null;
+  const fi  = P.contracteFi  ? new Date(P.contracteFi +"T00:00:00") : null;
+  let de = 1, a = n;
+  if(ini && !isNaN(ini)){
+    if(ini.getFullYear() > y || (ini.getFullYear() === y && ini.getMonth() > m)) return 0;
+    if(ini.getFullYear() === y && ini.getMonth() === m) de = ini.getDate();
+  }
+  if(fi && !isNaN(fi)){
+    if(fi.getFullYear() < y || (fi.getFullYear() === y && fi.getMonth() < m)) return 0;
+    if(fi.getFullYear() === y && fi.getMonth() === m) a = fi.getDate();
+  }
+  return Math.max(0, a - de + 1);
+}
+/** Dies d'alta de tot l'any, per prorratejar les pagues extres. */
+function diesAltaAny(y,P){ let t = 0; for(let m=0;m<12;m++) t += diesAlta(y,m,P); return t; }
+
 /** Proporció ANUAL de dies internacionals. Es calcula directament dels registres,
     sense passar per payMonth, perquè la paga extra la necessita i si no faríem
     una crida circular. */
@@ -438,7 +458,11 @@ function payMonth(y,m,noIrpf){
 
   const sum = f => dies.reduce((a,x) => a + f(x), 0);
   const M = {dies, hores:r2(sum(x=>x.h)), extraTot:r2(sum(x=>x.extra))};
-  M.salari    = r2(P.salari / P.pagues);
+  /* prorrateig per dies d'alta: el mes en què entres o surts no es cobra sencer */
+  M.diesMes  = mlen(y,m);
+  M.diesAlta = diesAlta(y,m,P);
+  M.factor   = M.diesMes > 0 ? M.diesAlta / M.diesMes : 0;
+  M.salari    = r2(P.salari / P.pagues * M.factor);
   M.extraNacH = r2(sum(x => x.via !== "I" ? x.extraPagada : 0));
   M.extraIntH = r2(sum(x => x.via === "I" ? x.extraPagada : 0));
   M.extraNac  = r2(M.extraNacH * hExtra);
@@ -447,8 +471,11 @@ function payMonth(y,m,noIrpf){
   M.dietaInt  = r2(sum(x => x.via === "I" ? x.dieta : 0));
   /* paga extra: amb 14 pagues n'hi ha dues, i la seva part exempta va amb la
      proporció ANUAL de dies internacionals, no la del mes (⚙️ Config B73) */
-  M.esExtra   = (P.mesosExtra||[]).includes(m);
-  M.pagaExtra = M.esExtra ? M.salari : 0;
+  M.esExtra   = (P.mesosExtra||[]).includes(m) && M.diesAlta > 0;
+  /* la paga extra es merita al llarg de l'any: si no hi has estat d'alta tot
+     l'any, en cobres la part proporcional als dies d'alta */
+  M.propAlta  = ylen(y) > 0 ? diesAltaAny(y,P) / ylen(y) : 0;
+  M.pagaExtra = M.esExtra ? r2(P.salari / P.pagues * M.propAlta) : 0;
   M.brut      = r2(M.salari + M.pagaExtra + M.extraNac + M.extraInt + M.dietaNac + M.dietaInt);
 
   /* B — exempció art. 7.p */
@@ -466,16 +493,18 @@ function payMonth(y,m,noIrpf){
   /* C — Seguretat Social. Les bases parteixen del salari anual/12, no de la
      paga de 14: és el prorrateig de cotització. Les h.extres queden fora de la
      base de contingències comunes i tenen la seva pròpia quota addicional. */
-  const base = P.salari / 12, extres = M.extraNac + M.extraInt, dietes = M.dietaNac + M.dietaInt;
-  M.bcc = Math.min(P.topall, r2(base + dietes));
-  M.bcp = Math.min(P.topall, r2(base + dietes + extres));
+  /* base i topall també van per dies d'alta */
+  const base = P.salari / 12 * M.factor, topall = P.topall * M.factor;
+  const extres = M.extraNac + M.extraInt, dietes = M.dietaNac + M.dietaInt;
+  M.bcc = Math.min(topall, r2(base + dietes));
+  M.bcp = Math.min(topall, r2(base + dietes + extres));
   M.ssCC = -r2(M.bcc * P.ssCC);
   M.ssMEI= -r2(M.bcc * P.ssMEI);
   M.ssAtur = -r2(M.bcp * P.ssAtur);
   M.ssFP = -r2(M.bcp * P.ssFP);
   M.ssExtra = -r2(extres * (P.forcaMajor ? P.ssExtraFM : P.ssExtra));
-  M.exces = Math.max(0, r2(base + dietes + extres - P.topall));
-  const t1 = P.solLim1 * P.topall, t2 = P.solLim2 * P.topall;
+  M.exces = Math.max(0, r2(base + dietes + extres - topall));
+  const t1 = P.solLim1 * topall, t2 = P.solLim2 * topall;
   M.ssSolid = -r2((Math.min(M.exces, t1) * P.solT1
                  + Math.min(Math.max(0, M.exces - t1), t2 - t1) * P.solT2
                  + Math.max(0, M.exces - t2) * P.solT3) * P.solTreb);
@@ -718,14 +747,15 @@ function viewNom(){
       <div class="s">${fmt(M.extraNacH+M.extraIntH)} pagades · ${fmt(M.generat)} h a la bossa</div></div>
   </div>
   <div class="card"><div class="card-t">A · Meritació bruta</div><table>
-    ${li("Salari de la paga mensual", eur(M.salari))}
-    ${M.pagaExtra ? li("Paga extra", eur(M.pagaExtra)) : ""}
+    ${li("Salari de la paga mensual" + (M.factor < 1 ? ` (${M.diesAlta}/${M.diesMes} dies)` : ""), eur(M.salari))}
+    ${M.pagaExtra ? li("Paga extra" + (M.propAlta < 1 ? ` (${fmt(M.propAlta*100)} % de l'any)` : ""), eur(M.pagaExtra)) : ""}
     ${li("H. extres pagades — dies nacionals", eur(M.extraNac))}
     ${li("H. extres pagades — dies internacionals", eur(M.extraInt))}
     ${li("Dietes nacionals", eur(M.dietaNac))}
     ${li("Dietes internacionals", eur(M.dietaInt))}
     <tfoot><tr><td style="text-align:left">TOTAL BRUT</td><td>${eur(M.brut)}</td></tr></tfoot></table>
-    <div class="note">Hora ordinària ${eur(hOrd)} €/h · hora extra ${eur(hOrd*(1+P.incrExtra))} €/h</div></div>
+    <div class="note">Hora ordinària ${eur(hOrd)} €/h · hora extra ${eur(hOrd*(1+P.incrExtra))} €/h${
+      M.factor < 1 ? ` · <b>mes d'alta parcial:</b> ${M.diesAlta} de ${M.diesMes} dies, així que el salari, la base de cotització i el topall van prorratejats.` : ""}</div></div>
   <div class="card"><div class="card-t">B · Exempció art. 7.p</div><table>
     ${li("Dies computables", M.diesComp)}
     ${li("Dies internacionals", M.diesIntl)}
@@ -1169,8 +1199,12 @@ function openPay(){
       ${sw("art7pDietes","Exempt dietes")}${sw("forcaMajor","Extres força major")}
       ${sw("descend50","Mínim descend. 50%")}${sw("ajudaTercers","Ajuda de tercers")}${sw("mobilitat","Mobilitat geogràfica")}
     </div>
-    <div class="lbl">Inici del contracte</div>
-    <input class="fld" id="pIni" type="date" value="${esc(P.contracteIni||"")}">
+    <div class="lbl">Període de contracte</div>
+    <div class="row2">
+      <div><input class="fld" id="pIni" type="date" value="${esc(P.contracteIni||"")}"><div class="note">inici</div></div>
+      <div><input class="fld" id="pFi" type="date" value="${esc(P.contracteFi||"")}"><div class="note">fi (buit = obert)</div></div>
+    </div>
+    <div class="note">Els mesos d'alta parcial cobren la part proporcional als dies naturals, i les pagues extres es prorrategen pels dies d'alta de l'any.</div>
     ${grp}
     <div class="note">Els percentatges s'escriuen en tant per u: 0,047 és el 4,70 %. Valors inicials presos del full ⚙️ Config del simulador 2026.</div>
     <div class="acts"><button class="btn pri" id="shOk">Desa</button></div>`);
@@ -1189,6 +1223,7 @@ function openPay(){
     $("payBool").querySelectorAll(".pb").forEach(b => P2[b.dataset.b] = b.classList.contains("on"));
     P2.irpfMode = ($("irpfMode").querySelector(".stb.on")||{dataset:{}}).dataset.m || "AUTO";
     P2.contracteIni = $("pIni").value || P2.contracteIni;
+    P2.contracteFi  = $("pFi").value;
     yr(y).cfgT = Date.now();
     save(); closeSheet(); render();
   };
