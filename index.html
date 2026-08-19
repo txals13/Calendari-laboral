@@ -321,12 +321,13 @@ function stats(y){
   const S = {
     months: [], theoTot:0, done:0, vacH:0, ldH:0,
     theoYTD:0, doneYTD:0, vacYTD:0, ldYTD:0,
-    days:{HQ:0,EST:0,NAC:0,POS:0,VAC:0,LD:0}, worked:0,
+    days:{HQ:0,EST:0,NAC:0,POS:0,VAC:0,LD:0,DC:0}, worked:0,
     ponts:0, festius:0, capsSetmana:0, festiusTreballats:0,
+    extra:0, extraYTD:0, curt:0,
     dest:{}, cfg:o.cfg
   };
   for(let m=0;m<12;m++){
-    const M = {theo:0, done:0, vac:0, ld:0, days:0};
+    const M = {theo:0, done:0, vac:0, ld:0, days:0, extra:0, curt:0};
     for(let d=1; d<=mlen(y,m); d++){
       const t = dtype(y,m,d), th = TYPES[t].h, r = rec(y,m,d);
       const past = ordinal(y,m,d) <= todayOrd;
@@ -338,6 +339,16 @@ function stats(y){
       const h = horesDia(r);   /* si hi ha fitxatge, mana el fitxatge */
       M.done += h; S.done += h;
       if(past) S.doneYTD += h;
+      /* Les hores extres es compten DIA A DIA i no es compensen entre elles:
+         2 h de més un dia i 1 h de menys un altre són 2 h extres, no 1. Per això
+         no serveix el saldo (fetes − objectiu), que sí que les compensa. */
+      if(!["VAC","LD","DC","POS"].includes(r.s)){   /* aquests dies no es treballen */
+        const prev = previstes(y,m,d,r);
+        const ex = Math.max(0, r2(h - prev));
+        const cu = Math.max(0, r2(prev - h));
+        M.extra += ex; S.extra += ex; if(past) S.extraYTD += ex;
+        M.curt += cu; S.curt += cu;
+      }
       if(r.s){
         S.days[r.s] = (S.days[r.s]||0) + 1;
         if(r.s === "VAC"){ M.vac += th; S.vacH += th; if(past) S.vacYTD += th; }
@@ -681,12 +692,15 @@ function viewSum(){
   const y = YEAR, S = stats(y);
   const kpi = (k,v,s,c,hero) => `<div class="kpi${hero?" hero":""}"><div class="k">${k}</div><div class="v${c?" "+c:""}">${v}</div>${s?`<div class="s">${s}</div>`:""}</div>`;
   const rows = S.months.map((M,i) => `<tr>
-      <td>${MSHORT[i]}</td><td class="dim">${fmt(M.theo)}</td><td>${fmt(M.target)}</td>
-      <td>${M.done?fmt(M.done):"—"}</td><td class="${M.done||M.vac||M.ld?(M.saldo>=0?"pos":"neg"):"dim"}">${M.done||M.vac||M.ld?sgn(M.saldo):"—"}</td>
+      <td>${MSHORT[i]}</td><td>${fmt(M.target)}</td>
+      <td>${M.done?fmt(M.done):"—"}</td>
+      <td class="${M.extra>0?"pos":"dim"}">${M.extra?fmt(M.extra):"—"}</td>
+      <td class="${M.done||M.vac||M.ld?(M.saldo>=0?"pos":"neg"):"dim"}">${M.done||M.vac||M.ld?sgn(M.saldo):"—"}</td>
       <td class="dim">${M.days||"—"}</td></tr>`).join("");
   return `
   <div class="kpis" style="margin-bottom:10px">
-    ${kpi("Saldo de l'any (h)", sgn(S.saldo), "fetes "+fmt(S.done)+" · objectiu "+fmt(S.target), S.saldo>=0?"pos":"neg", true)}
+    ${kpi("Hores extres (h)", fmt(S.extra), "comptades dia a dia · "+fmt(S.extraYTD)+" fins avui", S.extra>0?"pos":"", true)}
+    ${kpi("Saldo de l'any (h)", sgn(S.saldo), "fetes "+fmt(S.done)+" · objectiu "+fmt(S.target), S.saldo>=0?"pos":"neg")}
     ${kpi("Saldo fins avui (h)", sgn(S.saldoYTD), "objectiu a data d'avui "+fmt(S.targetYTD), S.saldoYTD>=0?"pos":"neg")}
     ${kpi("Vacances restants (h)", fmt(S.vacLeft), "de "+fmt((+S.cfg.vacH||0)+(+S.cfg.carry||0))+" h · "+S.days.VAC+" dies marcats", S.vacLeft<0?"neg":"")}
     ${kpi("Lliure disposició (h)", fmt(S.ldLeft), "de "+fmt(+S.cfg.ldH||0)+" h", S.ldLeft<0?"neg":"")}
@@ -706,10 +720,11 @@ function viewSum(){
   <div class="card">
     <div class="card-t">Detall mensual</div>
     <table>
-      <thead><tr><th>Mes</th><th>Teòr.</th><th>Objectiu</th><th>Fetes</th><th>Saldo</th><th>Dies</th></tr></thead>
+      <thead><tr><th>Mes</th><th>Objectiu</th><th>Fetes</th><th>Extres</th><th>Saldo</th><th>Dies</th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr><td>Any</td><td class="dim">${fmt(S.theoTot)}</td><td>${fmt(S.target)}</td>
-        <td>${fmt(S.done)}</td><td class="${S.saldo>=0?"pos":"neg"}">${sgn(S.saldo)}</td><td>${S.worked}</td></tr></tfoot>
+      <tfoot><tr><td>Any</td><td>${fmt(S.target)}</td>
+        <td>${fmt(S.done)}</td><td class="${S.extra>0?"pos":"dim"}">${fmt(S.extra)}</td>
+        <td class="${S.saldo>=0?"pos":"neg"}">${sgn(S.saldo)}</td><td>${S.worked}</td></tr></tfoot>
     </table>
   </div>
   <div class="card">
@@ -726,7 +741,8 @@ function viewSum(){
       <span class="chip">caps de setmana treballats <b>${S.capsSetmana}</b></span>
       <span class="chip">festius treballats <b>${S.festiusTreballats}</b></span>
     </div>
-    <div class="note">Teòriques de l'any segons calendari: <b>${fmt(S.theoTot)} h</b>. L'objectiu descompta les hores dels dies marcats com a vacances o lliure disposició${S.cfg.target!=null&&S.cfg.target!==""?" (ara sobreescrit manualment a "+fmt(+S.cfg.target)+" h)":""}.</div>
+    <div class="note">Teòriques de l'any segons calendari: <b>${fmt(S.theoTot)} h</b>. L'objectiu descompta les hores dels dies marcats com a vacances o lliure disposició${S.cfg.target!=null&&S.cfg.target!==""?" (ara sobreescrit manualment a "+fmt(+S.cfg.target)+" h)":""}.
+      <br><b>Extres i saldo no són el mateix.</b> Les extres es compten dia a dia i no es compensen: 2 h de més un dia i 1 h de menys un altre són 2 h extres. El saldo sí que les compensa, i serveix per saber si vas avançat o endarrerit${S.curt?", que aquí van "+fmt(S.curt)+" h per sota de la jornada":""}.</div>
   </div>`;
 }
 
