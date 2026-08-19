@@ -584,6 +584,38 @@ function irpfRate(y){
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+/* ── Desplegables ──
+   Al mòbil el navegador els mostra com una roda; a l'ordinador estalvien haver
+   d'escriure l'hora dígit a dígit. */
+function optsHora(sel, de=4, a=23, pas=15){
+  let o = `<option value=""${sel?"":" selected"}>—</option>`, trobat = false;
+  for(let h=de; h<=a; h++) for(let m=0; m<60; m+=pas){
+    const v = pad(h)+":"+pad(m);
+    if(v === sel) trobat = true;
+    o += `<option value="${v}"${v===sel?" selected":""}>${v}</option>`;
+  }
+  /* una hora desada que no caigui al pas (dades velles) no s'ha de perdre */
+  if(sel && !trobat) o += `<option value="${esc(sel)}" selected>${esc(sel)}</option>`;
+  return o;
+}
+/* `desDe` evita repetir el zero quan l'opció buida ja vol dir zero */
+function optsNum(sel, max, pas=0.25, buit="—", desDe=0){
+  const s = (sel === "" || sel == null) ? null : +sel;
+  let o = `<option value=""${s===null?" selected":""}>${buit}</option>`;
+  for(let v=desDe; v<=max+1e-9; v+=pas){
+    const n = Math.round(v*100)/100;
+    o += `<option value="${n}"${s!==null && Math.abs(n-s)<1e-9?" selected":""}>${n?fmtH(n):"0"}</option>`;
+  }
+  return o;
+}
+/** Fa que tocar el camp obri el calendari, no només la icona. */
+function obreCalendari(el){
+  if(!el) return;
+  const obre = () => { try{ el.showPicker(); }catch(e){} };
+  el.addEventListener("click", obre);
+  el.addEventListener("focus", obre);
+}
+
 function render(){
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.v === VIEW));
   const body = VIEW === "cal" ? viewCal() : VIEW === "sum" ? viewSum()
@@ -950,21 +982,21 @@ function openDay(d){
     <div class="stbtns" id="stb">${btns}</div>
     <div class="lbl">Fitxatge</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      <div><input class="fld" id="iIn" type="time" value="${esc(r.i||"")}"><div class="note">inici</div></div>
-      <div><input class="fld" id="fIn" type="time" value="${esc(r.f||"")}"><div class="note">fi</div></div>
-      <div><input class="fld" id="pIn" type="number" step="0.25" min="0" max="8" value="${r.p!=null?r.p:""}" placeholder="0"><div class="note">pausa (h)</div></div>
+      <div><select class="fld" id="iIn">${optsHora(r.i||"")}</select><div class="note">inici</div></div>
+      <div><select class="fld" id="fIn">${optsHora(r.f||"")}</select><div class="note">fi</div></div>
+      <div><select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select><div class="note">pausa (h)</div></div>
     </div>
     <div class="lbl">Hores fetes</div>
     <div class="hrow">
       <button id="hMinus">−</button>
-      <input class="fld" id="hIn" type="number" step="0.25" min="0" max="24" value="${r.h!=null?r.h:""}" placeholder="0">
+      <select class="fld" id="hIn">${optsNum(r.h!=null?r.h:"", 16, 0.25, "0", 0.25)}</select>
       <button id="hPlus">+</button>
       <button class="btn sm" id="hTheo" style="width:auto;height:40px;padding:0 10px">${fmt(th||8)} h</button>
     </div>
     <div class="note" id="hCalc"></div>
     <div class="row2">
       <div><div class="lbl">Hores previstes</div>
-        <input class="fld" id="prevIn" type="number" step="0.25" min="0" max="24" value="${r.prev!=null?r.prev:""}" placeholder="${fmt(th)}"></div>
+        <select class="fld" id="prevIn">${optsNum(r.prev!=null?r.prev:"", 12, 0.25, "auto ("+(fmtH(th)||"0")+")")}</select></div>
       <div><div class="lbl">Km vehicle propi</div>
         <input class="fld" id="kmIn" type="number" step="1" min="0" value="${r.km!=null?r.km:""}" placeholder="0"></div>
     </div>
@@ -992,7 +1024,7 @@ function openDay(d){
      això vol dir «cada dia amb la seva jornada» en comptes d'un número fix. */
   let autoH = false;
   const setAuto = v => { hIn.value = v; autoH = true; };
-  hIn.addEventListener("input", () => autoH = false);
+  ["input","change"].forEach(ev => hIn.addEventListener(ev, () => autoH = false));
   $("shX").onclick = closeSheet;
   $("stb").querySelectorAll(".stb").forEach(b => b.onclick = () => {
     const on = b.classList.contains("on");
@@ -1021,7 +1053,9 @@ function openDay(d){
       nota.textContent = `Del fitxatge: ${fmt(v)} h`;
     } else nota.textContent = "";
   };
-  ["iIn","fIn","pIn"].forEach(id => $(id).addEventListener("input", syncH));
+  ["iIn","fIn","pIn"].forEach(id =>
+    ["input","change"].forEach(ev => $(id).addEventListener(ev, syncH)));
+  obreCalendari($("untilIn"));
   syncH();
   $("shDel").onclick  = () => { applyRange(null); };
   $("shOk").onclick   = () => {
@@ -1227,6 +1261,7 @@ function openPay(){
     <div class="note">Els percentatges s'escriuen en tant per u: 0,047 és el 4,70 %. Valors inicials presos del full ⚙️ Config del simulador 2026.</div>
     <div class="acts"><button class="btn pri" id="shOk">Desa</button></div>`);
   $("shX").onclick = closeSheet;
+  obreCalendari($("pIni")); obreCalendari($("pFi"));
   $("irpfMode").querySelectorAll(".stb").forEach(b => b.onclick = () => {
     $("irpfMode").querySelectorAll(".stb").forEach(x => x.classList.remove("on")); b.classList.add("on");
   });
