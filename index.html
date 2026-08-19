@@ -131,8 +131,12 @@ td.dim{color:var(--tx3)}
 /* sheet + modal */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:none}
 .scrim.on{display:block}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--bg1);border-top:1px solid var(--br2);border-radius:16px 16px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;transform:translateY(100%);transition:transform .22s}
-.sheet.on{transform:translateY(0)}
+/* Tancat, el full ha de ser transparent als clics I invisible al tabulador.
+   A l'escriptori es tanca amb opacity:0 però es queda centrat damunt del
+   calendari: sense això s'empassa els clics de les cel·les i sembla que el
+   calendari s'hagi penjat. Al mòbil no es notava perquè marxa avall. */
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--bg1);border-top:1px solid var(--br2);border-radius:16px 16px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;transform:translateY(100%);pointer-events:none;transition:transform .22s}
+.sheet.on{transform:translateY(0);pointer-events:auto}
 @media(min-width:700px){.sheet{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-42%) scale(.97);opacity:0;width:560px;border-radius:14px;border:1px solid var(--br2);max-height:86vh;transition:opacity .18s,transform .18s}
 .sheet.on{transform:translate(-50%,-50%) scale(1);opacity:1}}
 .sh-hdr{display:flex;align-items:center;gap:8px;margin-bottom:4px}
@@ -171,7 +175,7 @@ td.dim{color:var(--tx3)}
   <div class="view" id="view"></div>
 </div>
 <div class="scrim" id="scrim"></div>
-<div class="sheet" id="sheet"></div>
+<div class="sheet" id="sheet" inert></div>
 <div id="tip"></div>
 
 <script>
@@ -963,8 +967,18 @@ function wireCharts(){
 }
 
 /* ───────────────────────── Editor del dia ───────────────────────── */
-function openSheet(html){ $("sheet").innerHTML = html; $("scrim").classList.add("on"); $("sheet").classList.add("on"); }
-function closeSheet(){ $("scrim").classList.remove("on"); $("sheet").classList.remove("on"); SEL = null; }
+/* `inert` treu el full tancat del tabulador i dels lectors de pantalla; el CSS
+   ja el fa transparent als clics amb pointer-events. */
+function openSheet(html){
+  const s = $("sheet");
+  s.innerHTML = html; s.inert = false;
+  $("scrim").classList.add("on"); s.classList.add("on");
+}
+function closeSheet(){
+  const s = $("sheet");
+  $("scrim").classList.remove("on"); s.classList.remove("on"); s.inert = true;
+  SEL = null;
+}
 
 function openDay(d){
   const y = YEAR, m = MONTH;
