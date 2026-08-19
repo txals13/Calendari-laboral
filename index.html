@@ -1523,6 +1523,11 @@ function init(){
   /* Carreguem Google d'entrada perquè, quan cliquis, requestAccessToken es cridi
      dins del mateix gest i el navegador no bloquegi la finestra. */
   initGIS();
+  /* Service worker: fa que l'app obri sense connexió. Ha de ser un fitxer de
+     debò servit per http(s); des d'un blob: el navegador el rebutja. */
+  if("serviceWorker" in navigator){
+    addEventListener("load", () => navigator.serviceWorker.register("./sw.js", {scope:"./"}).catch(() => {}));
+  }
   /* si ja hi havia sessió, baixem el que s'hagi fet en un altre dispositiu */
   const had = loadTok();
   signedIn = had; needsAuth = had && Date.now() >= tokenExp;

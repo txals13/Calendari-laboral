@@ -66,6 +66,22 @@ avisa. `MANUAL` aplica el percentatge que hi posis.
 ⚠️ És una **estimació**. La liquidació definitiva es fa a la declaració de la
 renda; contrasta-la amb el teu assessor.
 
+## Sense connexió
+
+`sw.js` és el service worker: guarda l'app i la serveix quan no hi ha xarxa, així
+que un cop l'has obert, torna a obrir en un avió o en un client sense cobertura.
+L'estratègia és **xarxa primer amb 3 segons de paciència**: amb cobertura sempre
+reps l'última versió publicada, i si la xarxa triga o no hi és, tira de la còpia.
+No et quedes encallat en una versió antiga.
+
+Les peticions a Google (autenticació i Drive) **no s'intercepten mai**: van sempre
+a la xarxa i no es guarden. Sense connexió pots fitxar i consultar-ho tot, però la
+sincronització esperarà a tenir cobertura.
+
+> El worker ha de ser un fitxer servit per http(s). Registrar-lo des d'una URL
+> `blob:` el navegador ho rebutja, i si la crida porta un `.catch()` buit et
+> quedes sense worker i sense assabentar-te'n.
+
 ## Sincronització entre dispositius
 
 El punt de la barra de dalt és l'estat: ○ només aquí · ● verd connectat ·
