@@ -1316,6 +1316,35 @@ function origenValid(){
   return location.protocol === "https:" && !/^(localhost|127\.|\[::1\])/.test(location.hostname);
 }
 const URL_PUBLICADA = "https://txals13.github.io/Calendari-laboral/";
+const SCOPE_DRIVE = "https://www.googleapis.com/auth/drive.file";
+let tokenClient = null, pendingAuth = null;
+
+/** El client es construeix UN cop, a l'arrencada. requestAccessToken obre una
+    finestra emergent, i els navegadors només la permeten dins del gest de
+    l'usuari: si abans hi fem un `await` que va a la xarxa (baixar l'script de
+    Google), quan tornem el gest ja s'ha perdut i la finestra queda bloquejada
+    en silenci. A l'escriptori passa sempre el primer cop; al mòbil no, perquè
+    el flux s'obre en pestanya. */
+async function initGIS(){
+  if(tokenClient) return true;
+  if(!origenValid()) return false;
+  if(!await loadGIS() || !window.google || !window.google.accounts || !google.accounts.oauth2) return false;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPE_DRIVE,
+    callback: r => {
+      const done = pendingAuth; pendingAuth = null; if(!done) return;
+      if(r.error){ done(null); return; }
+      token = r.access_token; tokenExp = Date.now() + (((r.expires_in||3600)-120)*1000);
+      saveTok(); done(token);
+    },
+    /* GIS ens diu si la finestra no s'ha pogut obrir o si l'has tancada */
+    error_callback: e => {
+      const done = pendingAuth; pendingAuth = null; if(done) done({err:(e && e.type) || "unknown"});
+    }
+  });
+  return true;
+}
 async function googleLogin(){
   if(!origenValid()){
     syncErr = location.protocol === "file:"
@@ -1323,24 +1352,21 @@ async function googleLogin(){
       : "Aquest origen (" + location.origin + ") no està autoritzat a Google. Obre l'app des de " + URL_PUBLICADA;
     return null;
   }
-  if(!await loadGIS() || !window.google || !window.google.accounts){
+  if(!await initGIS()){
     syncErr = "No s'ha pogut carregar Google Sign-In. Comprova la connexió."; return null;
   }
-  /* si el navegador bloqueja la finestra de Google el callback no arriba mai:
-     ho correm contra un temporitzador perquè sempre hi hagi resposta */
-  const opened = new Promise(res => {
-    google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: "https://www.googleapis.com/auth/drive.file",
-      callback: r => {
-        if(r.error){ res(null); return; }
-        token = r.access_token; tokenExp = Date.now() + (((r.expires_in||3600)-120)*1000);
-        saveTok(); res(token);
-      }
-    }).requestAccessToken({prompt:"consent"});
-  });
-  const out = await Promise.race([opened, new Promise(res => setTimeout(() => res("timeout"), 25000))]);
-  if(out === "timeout"){ syncErr = "L'accés no s'ha completat. Si s'ha bloquejat la finestra de Google, permet-la per a aquest lloc."; return null; }
+  /* xarxa de seguretat per si no arriba ni el callback ni l'error_callback */
+  const opened = new Promise(res => { pendingAuth = res; tokenClient.requestAccessToken({prompt:"consent"}); });
+  const out = await Promise.race([opened, new Promise(res => setTimeout(() => res("timeout"), 60000))]);
+  if(out === "timeout"){ pendingAuth = null; syncErr = "Google no ha respost. Torna-ho a provar."; return null; }
+  if(out && out.err){
+    syncErr = out.err === "popup_failed_to_open"
+      ? "El navegador ha bloquejat la finestra de Google. Permet les finestres emergents per a aquest lloc i torna-ho a provar."
+      : out.err === "popup_closed"
+      ? "Has tancat la finestra de Google abans d'acabar."
+      : "L'accés no s'ha pogut completar (" + out.err + ").";
+    return null;
+  }
   if(!out) syncErr = "Accés cancel·lat.";
   return out;
 }
@@ -1494,6 +1520,9 @@ function init(){
   document.addEventListener("keydown", e => { if(e.key === "Escape") closeSheet(); });
   render();
 
+  /* Carreguem Google d'entrada perquè, quan cliquis, requestAccessToken es cridi
+     dins del mateix gest i el navegador no bloquegi la finestra. */
+  initGIS();
   /* si ja hi havia sessió, baixem el que s'hagi fet en un altre dispositiu */
   const had = loadTok();
   signedIn = had; needsAuth = had && Date.now() >= tokenExp;
