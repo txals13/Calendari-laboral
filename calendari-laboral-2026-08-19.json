@@ -1,0 +1,14 @@
+{
+ "v": 1,
+ "years": {
+  "2026": {
+   "days": {},
+   "cfg": {
+    "vacH": 144,
+    "ldH": 12,
+    "carry": 0,
+    "target": null
+   }
+  }
+ }
+}

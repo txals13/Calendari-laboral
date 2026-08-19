@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f59e0b">
+<title>Calendari laboral</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQ2FsZW5kYXJpIGxhYm9yYWwiLCJzaG9ydF9uYW1lIjoiQ2FsZW5kYXJpIiwic3RhcnRfdXJsIjoiLi8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMTExODI3IiwidGhlbWVfY29sb3IiOiIjZjU5ZTBiIiwib3JpZW50YXRpb24iOiJhbnkiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBpYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNpSUhacFpYZENiM2c5SWpBZ01DQXhPVElnTVRreUlqNDhjbVZqZENCM2FXUjBhRDBpTVRreUlpQm9aV2xuYUhROUlqRTVNaUlnY25nOUlqTXlJaUJtYVd4c1BTSWpNVEV4T0RJM0lpOCtQSEpsWTNRZ2VEMGlNemdpSUhrOUlqVXlJaUIzYVdSMGFEMGlNVEUySWlCb1pXbG5hSFE5SWpFd01pSWdjbmc5SWpFeUlpQm1hV3hzUFNKdWIyNWxJaUJ6ZEhKdmEyVTlJaU5tTlRsbE1HSWlJSE4wY205clpTMTNhV1IwYUQwaU1USWlMejQ4Y21WamRDQjRQU0l6T0NJZ2VUMGlPRElpSUhkcFpIUm9QU0l4TVRZaUlHaGxhV2RvZEQwaU1UY2lJR1pwYkd3OUlpTm1OVGxsTUdJaUx6NDhjbVZqZENCNFBTSTJNaUlnZVQwaU1UQTRJaUIzYVdSMGFEMGlNak1pSUdobGFXZG9kRDBpTWpNaUlISjRQU0kySWlCbWFXeHNQU0lqWmpVNVpUQmlJaTgrUEhKbFkzUWdlRDBpTVRBMklpQjVQU0l4TURnaUlIZHBaSFJvUFNJeU15SWdhR1ZwWjJoMFBTSXlNeUlnY25nOUlqWWlJR1pwYkd3OUlpTTVZMkV6WVdZaUx6NDhMM04yWno0PSIsInNpemVzIjoiMTkyeDE5MiIsInR5cGUiOiJpbWFnZS9zdmcreG1sIiwicHVycG9zZSI6ImFueSBtYXNrYWJsZSJ9XX0=">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.5;background:var(--bg0);color:var(--tx1);transition:background .2s,color .2s}
+:root{
+  --bg0:#111827;--bg1:#1f2937;--bg2:#374151;--br:#374151;--br2:#4b5563;
+  --tx1:#f9fafb;--tx2:#9ca3af;--tx3:#6b7280;
+  --gold:#f59e0b;--goldbg:rgba(245,158,11,.1);--goldtx:#fcd34d;
+  --green:#10b981;--greenbg:rgba(16,185,129,.14);
+  --red:#ef4444;--redbg:rgba(239,68,68,.14);
+  --orange:#f97316;--orangebg:rgba(249,115,22,.16);
+  --blue:#3b82f6;--bluebg:rgba(59,130,246,.14);
+  --violet:#a78bfa;--violetbg:rgba(167,139,250,.16);
+  --cyan:#22d3ee;--cyanbg:rgba(34,211,238,.14);
+  --yellow:#eab308;--yellowbg:rgba(234,179,8,.16);
+  /* chart marks: stepped for the dark surface, validated in-band vs --bg1 */
+  --c-bar:#d97706;--c-line:#3b82f6;--c-pos:#059669;--c-neg:#ef4444;--c-surface:#1f2937;
+}
+:root.light{
+  --bg0:#f3f4f6;--bg1:#ffffff;--bg2:#e5e7eb;--br:#e5e7eb;--br2:#d1d5db;
+  --tx1:#111827;--tx2:#4b5563;--tx3:#9ca3af;
+  --gold:#d97706;--goldbg:rgba(217,119,6,.12);--goldtx:#92400e;
+  --green:#059669;--greenbg:rgba(5,150,105,.12);
+  --red:#dc2626;--redbg:rgba(220,38,38,.1);
+  --orange:#ea580c;--orangebg:rgba(234,88,12,.14);
+  --blue:#2563eb;--bluebg:rgba(37,99,235,.12);
+  --violet:#7c3aed;--violetbg:rgba(124,58,237,.13);
+  --cyan:#0891b2;--cyanbg:rgba(8,145,178,.12);
+  --yellow:#ca8a04;--yellowbg:rgba(202,138,4,.16);
+  --c-bar:#d97706;--c-line:#2563eb;--c-pos:#059669;--c-neg:#dc2626;--c-surface:#ffffff;
+}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+button,select,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+.btn{background:var(--bg2);border:1px solid var(--br2);border-radius:7px;padding:7px 11px;font-size:13px}
+.btn:hover{border-color:var(--gold)}
+.btn.pri{background:var(--gold);border-color:var(--gold);color:#111827;font-weight:600}
+.btn.dgr{color:var(--red);border-color:var(--red)}
+.btn.sm{padding:4px 8px;font-size:12px}
+.fld{background:var(--bg0);border:1px solid var(--br2);border-radius:7px;padding:7px 9px;width:100%}
+.fld:focus{outline:none;border-color:var(--gold)}
+/* topbar */
+.topbar{display:flex;align-items:center;gap:6px;padding:0 10px;height:50px;border-bottom:1px solid var(--br);background:var(--bg1);flex-shrink:0}
+.logo{font-family:monospace;font-weight:700;color:var(--gold);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;letter-spacing:.3px}
+.topbar select{background:var(--bg2);border:1px solid var(--br2);border-radius:7px;padding:5px 7px;font-size:13px;font-family:monospace}
+.topbar button{background:var(--bg2);border:1px solid var(--br2);border-radius:7px;padding:5px 8px;font-size:15px}
+@media(max-width:640px){.topbar{gap:4px;padding:0 6px}.topbar .logo{font-size:11px}}
+/* tabs */
+.tabs{display:flex;background:var(--bg1);border-bottom:1px solid var(--br);flex-shrink:0}
+.tab{flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:9px 4px;font-size:12.5px;color:var(--tx2);font-weight:600}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+/* view */
+.view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 40px}
+.wrap{max-width:900px;margin:0 auto}
+/* a escriptori la graella no ha de créixer sense fre: les cel·les són quadrades */
+.calwrap{max-width:520px;margin:0 auto}
+.card{background:var(--bg1);border:1px solid var(--br);border-radius:11px;padding:12px;margin-bottom:10px}
+.card-t{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:9px}
+/* month nav */
+.mnav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.mnav button{background:var(--bg1);border:1px solid var(--br2);border-radius:8px;padding:6px 12px;font-size:15px}
+.mnav .mtitle{flex:1;text-align:center;font-weight:700;font-size:15px;letter-spacing:.4px}
+/* calendar grid */
+.wk{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px}
+.wk div{text-align:center;font-size:10px;color:var(--tx3);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.day{aspect-ratio:1;border:1px solid var(--br);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;background:var(--bg1);overflow:hidden;padding:1px}
+.day.pad{border-color:transparent;background:none}
+.day.act{cursor:pointer}
+.day.act:hover{border-color:var(--gold)}
+.day .n{font-size:14px;font-weight:600;line-height:1.1}
+.day .h{font-size:9.5px;font-family:monospace;color:var(--tx2);line-height:1.2}
+.day .tag{position:absolute;top:2px;right:3px;font-size:8px;font-weight:800;font-family:monospace;letter-spacing:.3px;opacity:.85}
+.day.today{box-shadow:inset 0 0 0 2px var(--gold)}
+/* calendar-type tints (when no user state) */
+.t-X{background:var(--bg0);color:var(--tx3)}
+.t-F{background:var(--yellowbg);color:var(--yellow)}
+.t-B{background:var(--bluebg);color:var(--blue)}
+/* user-state tints */
+.s-HQ{background:var(--bg2)}
+.s-EST{background:var(--orangebg);color:var(--orange)}
+.s-NAC{background:var(--violetbg);color:var(--violet)}
+.s-POS{background:none;border-style:dashed;border-color:var(--orange);color:var(--orange)}
+.s-VAC{background:var(--greenbg);color:var(--green)}
+.s-LD{background:var(--cyanbg);color:var(--cyan)}
+.day .h{color:inherit;opacity:.8}
+/* legend */
+.leg{display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:10px;font-size:11px;color:var(--tx2)}
+.leg span{display:flex;align-items:center;gap:5px}
+.sw{width:11px;height:11px;border-radius:3px;border:1px solid var(--br2);flex-shrink:0}
+/* chips row */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--bg0);border:1px solid var(--br);border-radius:20px;padding:4px 11px;font-size:11.5px;color:var(--tx2);font-family:monospace;white-space:nowrap}
+.chip b{color:var(--tx1);font-weight:700}
+.chip.pos b{color:var(--green)}.chip.neg b{color:var(--red)}
+/* kpi */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.kpi{background:var(--bg1);border:1px solid var(--br);border-radius:11px;padding:11px 13px}
+.kpi .k{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;font-weight:700}
+.kpi .v{font-size:22px;font-weight:700;font-family:monospace;line-height:1.35;letter-spacing:-.5px;white-space:nowrap}
+.kpi .s{font-size:11px;color:var(--tx2)}
+.kpi.hero .v{font-size:27px}
+.kpi .v.pos{color:var(--green)}.kpi .v.neg{color:var(--red)}
+/* table */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:right;font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;padding:0 6px 6px;border-bottom:1px solid var(--br)}
+th:first-child,td:first-child{text-align:left}
+td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--br);font-family:monospace}
+tr:last-child td{border-bottom:none}
+tfoot td{font-weight:700;border-top:1px solid var(--br2);border-bottom:none;padding-top:7px}
+td.pos{color:var(--green)}td.neg{color:var(--red)}
+td.dim{color:var(--tx3)}
+/* chart */
+.chartwrap{position:relative;overflow-x:auto}
+/* al mòbil el gràfic no s'encongeix fins a fer-se il·legible: fa scroll dins la targeta */
+.chartwrap svg{display:block;min-width:560px;width:100%;height:auto}
+.clegend{display:flex;gap:14px;font-size:11px;color:var(--tx2);margin-bottom:8px;flex-wrap:wrap}
+.clegend span{display:flex;align-items:center;gap:5px}
+#tip{position:fixed;z-index:80;background:var(--bg2);border:1px solid var(--br2);border-radius:7px;padding:5px 9px;font-size:11.5px;font-family:monospace;pointer-events:none;display:none;white-space:pre;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+/* sheet + modal */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:none}
+.scrim.on{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--bg1);border-top:1px solid var(--br2);border-radius:16px 16px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;transform:translateY(100%);transition:transform .22s}
+.sheet.on{transform:translateY(0)}
+@media(min-width:700px){.sheet{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-42%) scale(.97);opacity:0;width:560px;border-radius:14px;border:1px solid var(--br2);max-height:86vh;transition:opacity .18s,transform .18s}
+.sheet.on{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.sh-hdr{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.sh-t{font-weight:700;font-size:15px;flex:1}
+.sh-sub{font-size:11.5px;color:var(--tx2);margin-bottom:12px;font-family:monospace}
+.lbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin:11px 0 5px}
+.stbtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px}
+.stb{border:1px solid var(--br2);background:var(--bg0);border-radius:8px;padding:8px 6px;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px}
+.stb small{font-size:9.5px;font-weight:500;color:var(--tx3);font-family:monospace}
+.stb.on{border-width:2px;padding:7px 5px}
+.hrow{display:flex;gap:6px;align-items:center}
+.hrow .fld{text-align:center;font-family:monospace;font-size:17px;font-weight:700}
+.hrow button{background:var(--bg2);border:1px solid var(--br2);border-radius:8px;width:42px;height:40px;font-size:17px;flex-shrink:0}
+.acts{display:flex;gap:7px;margin-top:16px}
+.acts .btn{flex:1;padding:10px}
+.note{font-size:11px;color:var(--tx3);margin-top:6px;line-height:1.45}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <span class="logo">CALENDARI LABORAL</span>
+    <select id="yearSel" title="Any"></select>
+    <button id="btnSync" title="Sincronització">○</button>
+    <button id="btnTheme" title="Tema">🌙</button>
+    <button id="btnCfg" title="Ajustos">⚙️</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-v="cal">Calendari</button>
+    <button class="tab" data-v="sum">Resum</button>
+    <button class="tab" data-v="trv">Viatges</button>
+  </div>
+  <div class="view" id="view"></div>
+</div>
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+<div id="tip"></div>
+
+<script>
+"use strict";
+/* ───────────────────────── Calendari oficial ─────────────────────────
+   Una lletra per dia natural, de l'1 de gener al 31 de desembre.
+   P jornada partida 8,25 · V divendres 6,00 · I intensiva estiu 7,00
+   C jornada curta 6,50 · F festiu · B pont (vacances) · X no laborable
+   El 2026 està transcrit del calendari laboral signat (1.890,00 h). */
+const CAL = {
+  2026:
+    "FBXXBFPPVXXPPPPVXXPPPPVXXPPPPVX" + // gener
+    "XPPPPVXXPPPPVXXPPPPVXXPPPPVX"    + // febrer
+    "XPPPPVXXPPPPVXXPPPPVXXPPPPVXXPP" + // març
+    "PBFXXFPPPVXXPPPPVXXPPPPVXXPPPP"  + // abril
+    "FXXPPPPVXXFPPPVXXPPPPVXXPPPPVXX" + // maig
+    "PPPPVXXPPPPVXXPPPPVXXPPFPVXXPP"  + // juny
+    "PPVXXPPPPVXXIIIIIXXIIIIIXXIIIII" + // juliol
+    "XXIIIIIXXIIIIIFXIIIIIXXIIIIIXXP" + // agost
+    "PPPVXXPPPVFXXPPPPVXXPPPPVXXPPP"  + // setembre
+    "PVXXPPPPVXXFPPPVXXPPPPVXXPPPPVX" + // octubre
+    "FPPPPVXXPPPPVXXPPPPVXXPPPPVXXP"  + // novembre
+    "PPPVXFFFPPVXXPPPPVXXPPPCFFXPPPC"   // desembre
+};
+
+const TYPES = {
+  P:{h:8.25,l:"Jornada partida"}, V:{h:6.00,l:"Divendres"},
+  I:{h:7.00,l:"Intensiva d'estiu"}, C:{h:6.50,l:"Jornada curta"},
+  F:{h:0,l:"Festiu"}, B:{h:0,l:"Pont (vacances)"}, X:{h:0,l:"No laborable"}
+};
+const STATES = {
+  HQ :{l:"HQ",        s:"A la seu",         c:"--tx2"},
+  EST:{l:"Estranger", s:"Viatge fora",      c:"--orange"},
+  NAC:{l:"Nacional",  s:"Viatge estatal",   c:"--violet"},
+  POS:{l:"Possible",  s:"Viatge previst",   c:"--orange"},
+  VAC:{l:"Vacances",  s:"Consumeix bossa",  c:"--green"},
+  LD :{l:"Lliure d.", s:"Lliure disposició",c:"--cyan"}
+};
+const MONTHS = ["Gener","Febrer","Març","Abril","Maig","Juny","Juliol","Agost","Setembre","Octubre","Novembre","Desembre"];
+const MSHORT = ["GEN","FEB","MAR","ABR","MAI","JUN","JUL","AGO","SET","OCT","NOV","DES"];
+const WDAYS  = ["dl","dt","dc","dj","dv","ds","dg"];
+
+/* ───────────────────────── Dades ───────────────────────── */
+const KEY = "cal_v1_data", KTHM = "cal_v1_thm", KTOK = "cal_v1_tok", KROOT = "cal_v1_root";
+const DEFCFG = () => ({vacH:144, ldH:12, carry:0, target:null});
+let DB = {v:1, years:{}};
+let YEAR = 2026, MONTH = new Date().getMonth(), VIEW = "cal", SEL = null;
+
+/* Google Drive — mateix client OAuth que el Field Service Log, així que només
+   funciona servit des d'un origen autoritzat (https://txals13.github.io/...).
+   Obrint el fitxer del disc l'autenticació no arrenca. */
+const CLIENT_ID = "514772123815-ncjsebgvc01t8arftqp8bo43jr4fgneb.apps.googleusercontent.com";
+const ROOT_NAME = "Calendari laboral", DATA_FILE = "calendari_laboral_data.json";
+const TOMB_DAYS = 90; /* les làpides caduquen: prou temps perquè tot dispositiu hagi sincronitzat */
+let token = null, tokenExp = 0, fileId = null, rootId = null;
+let signedIn = false, syncing = false, pushPending = false, pushTimer = null, lastSync = 0, syncErr = "";
+/* el testimoni d'OAuth dura una hora i no hi ha refresc: needsAuth distingeix
+   «has tancat la sessió» de «només cal tornar a autoritzar», que és un toc */
+let needsAuth = false;
+
+function load(){
+  try{ const r = localStorage.getItem(KEY); if(r) DB = JSON.parse(r); }catch(e){}
+  if(!DB.years) DB = {v:1, years:{}};
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){ alert("No s'han pogut desar les dades: "+e.message); }
+  schedulePush();
+}
+function yr(y){
+  y = String(y);
+  if(!DB.years[y]) DB.years[y] = {days:{}, cfg:DEFCFG()};
+  const o = DB.years[y];
+  o.cfg = Object.assign(DEFCFG(), o.cfg||{});
+  if(!o.days) o.days = {};
+  return o;
+}
+
+/* ───────────────────────── Dates i tipus ───────────────────────── */
+const pad = n => String(n).padStart(2,"0");
+const iso = (y,m,d) => y+"-"+pad(m+1)+"-"+pad(d);
+const isLeap = y => (y%4===0 && y%100!==0) || y%400===0;
+const mlen = (y,m) => [31, isLeap(y)?29:28, 31,30,31,30,31,31,30,31,30,31][m];
+const ylen = y => isLeap(y) ? 366 : 365;
+function ordinal(y,m,d){ let n = d-1; for(let i=0;i<m;i++) n += mlen(y,i); return n; }
+/* dilluns = 0 */
+function wday(y,m,d){ return (new Date(y,m,d).getDay() + 6) % 7; }
+
+/** Tipus de dia del calendari oficial; si l'any no hi és, patró per defecte. */
+function dtype(y,m,d){
+  const s = CAL[y];
+  if(s && s.length === ylen(y)) return s[ordinal(y,m,d)];
+  const w = wday(y,m,d);
+  return w >= 5 ? "X" : (w === 4 ? "V" : "P");
+}
+const theo = (y,m,d) => TYPES[dtype(y,m,d)].h;
+
+/* Cada dia porta la seva marca de temps `t`: és la unitat que es fusiona entre
+   dispositius. Esborrar no treu la clau, hi deixa una làpida {del:1} — si no,
+   l'altre dispositiu, que encara té la versió antiga, tornaria a ressuscitar el dia. */
+const rec = (y,m,d) => { const r = yr(y).days[iso(y,m,d)]; return (r && !r.del) ? r : null; };
+function setRec(y,m,d,v){
+  const o = yr(y), k = iso(y,m,d);
+  if(v === null){ if(o.days[k]) o.days[k] = {del:1, t:Date.now()}; }
+  else o.days[k] = Object.assign({}, v, {t:Date.now()});
+  save();
+}
+
+const fmt  = n => (Math.round(n*100)/100).toLocaleString("ca-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0 = n => (Math.round(n*10)/10).toLocaleString("ca-ES",{maximumFractionDigits:1});
+/* hores dins la cel·la: 8,25 · 7 · 6,5 — sense zeros de cua */
+const fmtH = n => n ? (Math.round(n*100)/100).toLocaleString("ca-ES",{maximumFractionDigits:2}) : "";
+/* abril, agost i octubre porten apòstrof: «3 d'agost», no «3 de agost» */
+const deMes = m => ("aeiou".includes(MONTHS[m][0].toLowerCase()) ? "d'" : "de ") + MONTHS[m].toLowerCase();
+const sgn  = n => (n>=0?"+":"−") + fmt(Math.abs(n));
+
+/* ───────────────────────── Agregats ───────────────────────── */
+function stats(y){
+  const o = yr(y), today = new Date();
+  const todayOrd = (today.getFullYear() === y) ? ordinal(y, today.getMonth(), today.getDate()) : (today.getFullYear() > y ? 1e9 : -1);
+  const S = {
+    months: [], theoTot:0, done:0, vacH:0, ldH:0,
+    theoYTD:0, doneYTD:0, vacYTD:0, ldYTD:0,
+    days:{HQ:0,EST:0,NAC:0,POS:0,VAC:0,LD:0}, worked:0,
+    ponts:0, festius:0, capsSetmana:0, festiusTreballats:0,
+    dest:{}, cfg:o.cfg
+  };
+  for(let m=0;m<12;m++){
+    const M = {theo:0, done:0, vac:0, ld:0, days:0};
+    for(let d=1; d<=mlen(y,m); d++){
+      const t = dtype(y,m,d), th = TYPES[t].h, r = rec(y,m,d);
+      const past = ordinal(y,m,d) <= todayOrd;
+      M.theo += th; S.theoTot += th;
+      if(t === "B") S.ponts++;
+      if(t === "F") S.festius++;
+      if(past) S.theoYTD += th;
+      if(!r) continue;
+      const h = +r.h || 0;
+      M.done += h; S.done += h;
+      if(past) S.doneYTD += h;
+      if(r.s){
+        S.days[r.s] = (S.days[r.s]||0) + 1;
+        if(r.s === "VAC"){ M.vac += th; S.vacH += th; if(past) S.vacYTD += th; }
+        if(r.s === "LD" ){ M.ld  += th; S.ldH  += th; if(past) S.ldYTD  += th; }
+      }
+      if(h > 0){
+        M.days++; S.worked++;
+        if(t === "X") S.capsSetmana++;
+        if(t === "F") S.festiusTreballats++;
+        if(r.d){
+          const k = r.d.toUpperCase();
+          S.dest[k] = S.dest[k] || {days:0, hours:0};
+          S.dest[k].days++; S.dest[k].hours += h;
+        }
+      }
+    }
+    M.target = M.theo - M.vac - M.ld;
+    M.saldo  = M.done - M.target;
+    S.months.push(M);
+  }
+  S.autoTarget = S.theoTot - S.vacH - S.ldH;
+  S.target     = (o.cfg.target != null && o.cfg.target !== "") ? +o.cfg.target : S.autoTarget;
+  S.saldo      = S.done - S.target;
+  S.targetYTD  = S.theoYTD - S.vacYTD - S.ldYTD;
+  S.saldoYTD   = S.doneYTD - S.targetYTD;
+  S.vacLeft    = (+o.cfg.vacH || 0) + (+o.cfg.carry || 0) - S.vacH;
+  S.ldLeft     = (+o.cfg.ldH  || 0) - S.ldH;
+  return S;
+}
+
+/* ───────────────────────── Render ───────────────────────── */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function render(){
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.v === VIEW));
+  $("view").innerHTML = '<div class="wrap">' + (VIEW === "cal" ? viewCal() : VIEW === "sum" ? viewSum() : viewTrv()) + '</div>';
+  if(VIEW === "cal") wireCal();
+  if(VIEW === "sum") wireCharts();
+}
+
+/* ── Calendari ── */
+function viewCal(){
+  const y = YEAR, m = MONTH, S = stats(y), M = S.months[m];
+  const first = wday(y,m,1), n = mlen(y,m), today = new Date();
+  let cells = "";
+  for(let i=0;i<first;i++) cells += '<div class="day pad"></div>';
+  for(let d=1; d<=n; d++){
+    const t = dtype(y,m,d), r = rec(y,m,d);
+    const cls = ["day","act"];
+    if(r && r.s) cls.push("s-"+r.s); else if(t==="X"||t==="F"||t==="B") cls.push("t-"+t);
+    if(today.getFullYear()===y && today.getMonth()===m && today.getDate()===d) cls.push("today");
+    const h = r && +r.h ? fmtH(+r.h)+"h" : fmtH(TYPES[t].h);
+    const tag = r && r.d ? esc(r.d) : (r && r.s ? r.s.slice(0,3) : "");
+    cells += `<div class="${cls.join(" ")}" data-d="${d}">`
+           + (tag ? `<span class="tag">${tag}</span>` : "")
+           + `<span class="n">${d}</span><span class="h">${h}</span></div>`;
+  }
+  const leg = [["t-X","No laborable"],["t-F","Festiu"],["t-B","Pont"],["s-HQ","HQ"],
+               ["s-EST","Estranger"],["s-NAC","Nacional"],["s-VAC","Vacances"],["s-LD","Lliure disp."]]
+    .map(([c,l]) => `<span><i class="sw ${c}"></i>${l}</span>`).join("");
+  return `
+  <div class="mnav">
+    <button id="mPrev">‹</button>
+    <div class="mtitle">${MONTHS[m].toUpperCase()} ${y}</div>
+    <button id="mNext">›</button>
+  </div>
+  <div class="chips" style="margin-bottom:10px">
+    <span class="chip">objectiu <b>${fmt(M.target)}</b> h</span>
+    <span class="chip">fetes <b>${fmt(M.done)}</b> h</span>
+    <span class="chip ${M.saldo>=0?"pos":"neg"}">saldo <b>${sgn(M.saldo)}</b> h</span>
+    <span class="chip">dies <b>${M.days}</b></span>
+  </div>
+  <div class="calwrap">
+    <div class="wk">${WDAYS.map(w=>`<div>${w}</div>`).join("")}</div>
+    <div class="grid" id="grid">${cells}</div>
+  </div>
+  <div class="leg">${leg}</div>
+  <div class="note">Toca un dia per marcar-lo. Des de l'editor pots aplicar el mateix estat a un rang de dates.</div>`;
+}
+function wireCal(){
+  $("mPrev").onclick = () => { MONTH--; if(MONTH<0){MONTH=11; YEAR--; syncYearSel();} render(); };
+  $("mNext").onclick = () => { MONTH++; if(MONTH>11){MONTH=0; YEAR++; syncYearSel();} render(); };
+  $("grid").querySelectorAll(".day.act").forEach(el => el.onclick = () => openDay(+el.dataset.d));
+}
+
+/* ── Resum ── */
+function viewSum(){
+  const y = YEAR, S = stats(y);
+  const kpi = (k,v,s,c,hero) => `<div class="kpi${hero?" hero":""}"><div class="k">${k}</div><div class="v${c?" "+c:""}">${v}</div>${s?`<div class="s">${s}</div>`:""}</div>`;
+  const rows = S.months.map((M,i) => `<tr>
+      <td>${MSHORT[i]}</td><td class="dim">${fmt(M.theo)}</td><td>${fmt(M.target)}</td>
+      <td>${M.done?fmt(M.done):"—"}</td><td class="${M.done||M.vac||M.ld?(M.saldo>=0?"pos":"neg"):"dim"}">${M.done||M.vac||M.ld?sgn(M.saldo):"—"}</td>
+      <td class="dim">${M.days||"—"}</td></tr>`).join("");
+  return `
+  <div class="kpis" style="margin-bottom:10px">
+    ${kpi("Saldo de l'any (h)", sgn(S.saldo), "fetes "+fmt(S.done)+" · objectiu "+fmt(S.target), S.saldo>=0?"pos":"neg", true)}
+    ${kpi("Saldo fins avui (h)", sgn(S.saldoYTD), "objectiu a data d'avui "+fmt(S.targetYTD), S.saldoYTD>=0?"pos":"neg")}
+    ${kpi("Vacances restants (h)", fmt(S.vacLeft), "de "+fmt((+S.cfg.vacH||0)+(+S.cfg.carry||0))+" h · "+S.days.VAC+" dies marcats", S.vacLeft<0?"neg":"")}
+    ${kpi("Lliure disposició (h)", fmt(S.ldLeft), "de "+fmt(+S.cfg.ldH||0)+" h", S.ldLeft<0?"neg":"")}
+  </div>
+  <div class="card">
+    <div class="card-t">Hores per mes</div>
+    <div class="clegend">
+      <span><i class="sw" style="background:var(--c-bar);border-color:var(--c-bar)"></i>Hores fetes</span>
+      <span><svg width="16" height="10"><line x1="1" y1="5" x2="15" y2="5" stroke="var(--tx3)" stroke-width="2"/></svg>Objectiu del mes</span>
+    </div>
+    <div class="chartwrap">${barChart(S)}</div>
+  </div>
+  <div class="card">
+    <div class="card-t">Saldo acumulat (h)</div>
+    <div class="chartwrap">${lineChart(S)}</div>
+  </div>
+  <div class="card">
+    <div class="card-t">Detall mensual</div>
+    <table>
+      <thead><tr><th>Mes</th><th>Teòr.</th><th>Objectiu</th><th>Fetes</th><th>Saldo</th><th>Dies</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td>Any</td><td class="dim">${fmt(S.theoTot)}</td><td>${fmt(S.target)}</td>
+        <td>${fmt(S.done)}</td><td class="${S.saldo>=0?"pos":"neg"}">${sgn(S.saldo)}</td><td>${S.worked}</td></tr></tfoot>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-t">Recompte de dies</div>
+    <div class="chips">
+      <span class="chip">HQ <b>${S.days.HQ}</b></span>
+      <span class="chip">estranger <b>${S.days.EST}</b></span>
+      <span class="chip">nacional <b>${S.days.NAC}</b></span>
+      <span class="chip">previstos <b>${S.days.POS}</b></span>
+      <span class="chip">vacances <b>${S.days.VAC}</b></span>
+      <span class="chip">lliure disp. <b>${S.days.LD}</b></span>
+      <span class="chip">ponts <b>${S.ponts}</b></span>
+      <span class="chip">festius <b>${S.festius}</b></span>
+      <span class="chip">caps de setmana treballats <b>${S.capsSetmana}</b></span>
+      <span class="chip">festius treballats <b>${S.festiusTreballats}</b></span>
+    </div>
+    <div class="note">Teòriques de l'any segons calendari: <b>${fmt(S.theoTot)} h</b>. L'objectiu descompta les hores dels dies marcats com a vacances o lliure disposició${S.cfg.target!=null&&S.cfg.target!==""?" (ara sobreescrit manualment a "+fmt(+S.cfg.target)+" h)":""}.</div>
+  </div>`;
+}
+
+/* ── Viatges ── */
+function viewTrv(){
+  const y = YEAR, S = stats(y);
+  const ks = Object.keys(S.dest).sort((a,b) => S.dest[b].days - S.dest[a].days);
+  const rows = ks.length ? ks.map(k => `<tr><td>${esc(k)}</td><td>${S.dest[k].days}</td><td>${fmt(S.dest[k].hours)}</td></tr>`).join("")
+                         : `<tr><td colspan="3" class="dim" style="text-align:left">Cap destinació registrada encara.</td></tr>`;
+  /* estades = trams consecutius amb la mateixa destinació */
+  const trips = [];
+  let cur = null;
+  for(let m=0;m<12;m++) for(let d=1; d<=mlen(y,m); d++){
+    const r = rec(y,m,d), k = r && r.d ? r.d.toUpperCase() : null;
+    if(k && cur && cur.k === k && cur.gap < 4){ cur.to = [m,d]; cur.days++; cur.gap = 0; }
+    else if(k){ if(cur) trips.push(cur); cur = {k, from:[m,d], to:[m,d], days:1, gap:0}; }
+    else if(cur) cur.gap++;
+  }
+  if(cur) trips.push(cur);
+  const dstr = ([m,d]) => d+" "+MSHORT[m].toLowerCase();
+  const trows = trips.length ? trips.reverse().map(t =>
+      `<tr><td>${esc(t.k)}</td><td style="text-align:left" class="dim">${dstr(t.from)} → ${dstr(t.to)}</td><td>${t.days}</td></tr>`).join("")
+    : `<tr><td colspan="3" class="dim" style="text-align:left">—</td></tr>`;
+  return `
+  <div class="card">
+    <div class="card-t">Dies per destinació — ${y}</div>
+    <table><thead><tr><th>Destinació</th><th>Dies</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). Només compten els dies amb hores registrades.</div>
+  </div>
+  <div class="card">
+    <div class="card-t">Estades</div>
+    <table><thead><tr><th>Destinació</th><th style="text-align:left">Període</th><th>Dies</th></tr></thead><tbody>${trows}</tbody></table>
+    <div class="note">Els dies solts amb la mateixa destinació separats per menys de 4 dies es compten com una sola estada.</div>
+  </div>`;
+}
+
+/* ───────────────────────── Gràfics ───────────────────────── */
+const CH = {w:720, h:230, l:38, r:12, t:14, b:26};
+function niceMax(v){
+  if(v <= 0) return 10;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  return Math.ceil(v / (p/2)) * (p/2);
+}
+function barChart(S){
+  const {w,h,l,r,t,b} = CH, iw = w-l-r, ih = h-t-b;
+  const max = niceMax(Math.max(10, ...S.months.map(M => Math.max(M.done, M.target))));
+  const band = iw/12, bw = Math.min(24, band-12);
+  const yv = v => t + ih - (v/max)*ih;
+  let g = "", marks = "";
+  for(let i=0;i<=4;i++){
+    const v = max*i/4, py = yv(v);
+    g += `<line x1="${l}" y1="${py}" x2="${w-r}" y2="${py}" stroke="var(--br)" stroke-width="1"/>`
+       + `<text x="${l-6}" y="${py+3.5}" text-anchor="end" font-size="11.5" fill="var(--tx3)">${fmt0(v)}</text>`;
+  }
+  S.months.forEach((M,i) => {
+    const cx = l + band*i + band/2, bh = Math.max(0, ih - (yv(M.done)-t));
+    if(M.done > 0)
+      marks += `<rect x="${cx-bw/2}" y="${yv(M.done)}" width="${bw}" height="${bh}" rx="4" ry="4" fill="var(--c-bar)"/>`
+             + `<rect x="${cx-bw/2}" y="${Math.max(yv(M.done), t+ih-4)}" width="${bw}" height="${Math.min(4,bh)}" fill="var(--c-bar)"/>`;
+    if(M.target > 0)
+      marks += `<line x1="${cx-bw/2-4}" y1="${yv(M.target)}" x2="${cx+bw/2+4}" y2="${yv(M.target)}" stroke="var(--tx3)" stroke-width="2" stroke-linecap="round"/>`;
+    marks += `<rect class="hit" x="${l+band*i}" y="${t}" width="${band}" height="${ih}" fill="transparent"
+       data-tip="${MSHORT[i]}\nfetes ${fmt(M.done)} h\nobjectiu ${fmt(M.target)} h\nsaldo ${sgn(M.saldo)} h"/>`;
+    marks += `<text x="${cx}" y="${h-8}" text-anchor="middle" font-size="11.5" fill="var(--tx3)">${MSHORT[i]}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Hores fetes per mes amb l'objectiu de cada mes">${g}
+    <line x1="${l}" y1="${t+ih}" x2="${w-r}" y2="${t+ih}" stroke="var(--br2)" stroke-width="1"/>${marks}</svg>`;
+}
+function lineChart(S){
+  const {w,l,r,t,b} = CH, h = 190, ih = h-t-b, iw = w-l-r;
+  let acc = 0; const pts = [];
+  S.months.forEach((M,i) => { acc += M.saldo; pts.push({i, v:acc, m:M}); });
+  /* l'escala envolta les dades i el zero, sense reservar un rang simètric buit */
+  const vals = pts.map(p => p.v).concat([0]);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const step = niceMax(Math.max(hi - lo, 10)) / 4;
+  const min = Math.floor(lo/step) * step, max = Math.max(Math.ceil(hi/step) * step, min + step*4);
+  const yv = v => t + ih - ((v-min)/(max-min))*ih;
+  const xv = i => l + (iw/12)*i + (iw/12)/2;
+  let g = "";
+  for(let i=0;i<=4;i++){
+    const v = min + (max-min)*i/4, py = yv(v);
+    g += `<line x1="${l}" y1="${py}" x2="${w-r}" y2="${py}" stroke="var(--br)" stroke-width="1"/>`
+       + `<text x="${l-6}" y="${py+3.5}" text-anchor="end" font-size="11.5" fill="var(--tx3)">${fmt0(v)}</text>`;
+  }
+  g += `<line x1="${l}" y1="${yv(0)}" x2="${w-r}" y2="${yv(0)}" stroke="var(--br2)" stroke-width="1"/>`;
+  const live = pts.filter(p => p.m.done > 0 || p.m.vac > 0 || p.m.ld > 0);
+  let path = "", marks = "";
+  live.forEach((p,k) => { path += (k?" L ":"M ") + xv(p.i) + " " + yv(p.v); });
+  if(live.length){
+    marks += `<path d="${path}" fill="none" stroke="var(--c-line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = live[live.length-1];
+    /* l'etiqueta va sempre cap a dins del marc, no cap a la vora que té a prop */
+    const ly = yv(last.v), off = ly > t + ih/2 ? -12 : 18;
+    marks += `<circle cx="${xv(last.i)}" cy="${ly}" r="4.5" fill="var(--c-line)" stroke="var(--c-surface)" stroke-width="2"/>`
+           + `<text x="${xv(last.i)}" y="${ly + off}" text-anchor="${last.i>9?"end":"middle"}" font-size="12.5" font-weight="700" fill="var(--tx1)">${sgn(last.v)} h</text>`;
+    live.forEach(p => { marks += `<rect class="hit" x="${xv(p.i)-iw/24}" y="${t}" width="${iw/12}" height="${ih}" fill="transparent" data-tip="${MSHORT[p.i]}\nacumulat ${sgn(p.v)} h\nmes ${sgn(p.m.saldo)} h"/>`; });
+  }
+  S.months.forEach((M,i) => { marks += `<text x="${xv(i)}" y="${h-8}" text-anchor="middle" font-size="11.5" fill="var(--tx3)">${MSHORT[i]}</text>`; });
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Saldo d'hores acumulat mes a mes">${g}${marks}</svg>`;
+}
+function wireCharts(){
+  const tip = $("tip");
+  $("view").querySelectorAll(".hit").forEach(el => {
+    const show = e => {
+      tip.textContent = el.dataset.tip;
+      tip.style.display = "block";
+      const p = e.touches ? e.touches[0] : e;
+      const bx = Math.min(p.clientX + 12, innerWidth - tip.offsetWidth - 8);
+      tip.style.left = Math.max(8, bx) + "px";
+      tip.style.top  = Math.max(8, p.clientY - tip.offsetHeight - 12) + "px";
+    };
+    el.addEventListener("mousemove", show);
+    el.addEventListener("touchstart", show, {passive:true});
+    el.addEventListener("mouseleave", () => tip.style.display = "none");
+    el.addEventListener("touchend", () => setTimeout(() => tip.style.display = "none", 1600));
+  });
+}
+
+/* ───────────────────────── Editor del dia ───────────────────────── */
+function openSheet(html){ $("sheet").innerHTML = html; $("scrim").classList.add("on"); $("sheet").classList.add("on"); }
+function closeSheet(){ $("scrim").classList.remove("on"); $("sheet").classList.remove("on"); SEL = null; }
+
+function openDay(d){
+  const y = YEAR, m = MONTH;
+  SEL = {y,m,d};
+  const t = dtype(y,m,d), r = rec(y,m,d) || {};
+  const th = TYPES[t].h;
+  const dests = [...new Set(Object.values(yr(y).days).map(x => x.d).filter(Boolean))].sort();
+  const btns = Object.entries(STATES).map(([k,v]) =>
+    `<button class="stb${r.s===k?" on":""}" data-s="${k}" style="${r.s===k?`border-color:var(${v.c});color:var(${v.c})`:""}">${v.l}<small>${v.s}</small></button>`).join("");
+  openSheet(`
+    <div class="sh-hdr"><div class="sh-t">${WDAYS[wday(y,m,d)]} ${d} ${deMes(m)} de ${y}</div>
+      <button class="btn sm" id="shX">✕</button></div>
+    <div class="sh-sub">${TYPES[t].l}${th?" · "+fmt(th)+" h teòriques":" · sense jornada"}</div>
+    <div class="lbl">Estat del dia</div>
+    <div class="stbtns" id="stb">${btns}</div>
+    <div class="lbl">Hores fetes</div>
+    <div class="hrow">
+      <button id="hMinus">−</button>
+      <input class="fld" id="hIn" type="number" step="0.25" min="0" max="24" value="${r.h!=null?r.h:""}" placeholder="0">
+      <button id="hPlus">+</button>
+      <button class="btn sm" id="hTheo" style="width:auto;height:40px;padding:0 10px">${fmt(th||8)} h</button>
+    </div>
+    <div class="row2">
+      <div><div class="lbl">Destinació</div>
+        <input class="fld" id="dIn" list="dl" maxlength="6" placeholder="CA, PL…" value="${esc(r.d||"")}" style="text-transform:uppercase">
+        <datalist id="dl">${dests.map(x=>`<option value="${esc(x)}">`).join("")}</datalist></div>
+      <div><div class="lbl">Aplica fins a</div>
+        <input class="fld" id="untilIn" type="date" min="${iso(y,m,d)}" max="${y}-12-31"></div>
+    </div>
+    <div><div class="lbl">Nota</div><input class="fld" id="nIn" maxlength="120" value="${esc(r.n||"")}" placeholder="opcional"></div>
+    <div class="note">«Aplica fins a» repeteix estat, hores i destinació a tots els dies del rang. Els dies sense jornada (caps de setmana, festius) es deixen intactes tret que hi posis hores.</div>
+    <div class="acts">
+      <button class="btn dgr" id="shDel">Esborra</button>
+      <button class="btn pri" id="shOk">Desa</button>
+    </div>`);
+
+  const hIn = $("hIn");
+  /* autoH = les hores del quadre les hem posat nosaltres, no l'usuari. En un rang,
+     això vol dir «cada dia amb la seva jornada» en comptes d'un número fix. */
+  let autoH = false;
+  const setAuto = v => { hIn.value = v; autoH = true; };
+  hIn.addEventListener("input", () => autoH = false);
+  $("shX").onclick = closeSheet;
+  $("stb").querySelectorAll(".stb").forEach(b => b.onclick = () => {
+    const on = b.classList.contains("on");
+    $("stb").querySelectorAll(".stb").forEach(x => { x.classList.remove("on"); x.style.borderColor=""; x.style.color=""; });
+    if(!on){
+      b.classList.add("on");
+      b.style.borderColor = `var(${STATES[b.dataset.s].c})`; b.style.color = `var(${STATES[b.dataset.s].c})`;
+      if(["VAC","LD","POS"].includes(b.dataset.s)){ hIn.value = ""; autoH = false; }
+      else if(!hIn.value || autoH) setAuto(th || 8);
+    }
+  });
+  const step = k => { const v = Math.max(0, (+hIn.value||0) + k); hIn.value = v ? v : ""; autoH = false; };
+  $("hMinus").onclick = () => step(-0.25);
+  $("hPlus").onclick  = () => step(0.25);
+  $("hTheo").onclick  = () => setAuto(th || 8);
+  $("shDel").onclick  = () => { applyRange(null); };
+  $("shOk").onclick   = () => {
+    const s = ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "";
+    const h = +hIn.value || 0, dd = $("dIn").value.trim().toUpperCase(), n = $("nIn").value.trim();
+    if(!s && !h && !dd && !n) return applyRange(null);
+    applyRange({s, h, d:dd, n, auto: autoH && h > 0});
+  };
+}
+function applyRange(val){
+  const {y,m,d} = SEL, until = $("untilIn").value;
+  let last = {m,d};
+  if(until){
+    const p = until.split("-").map(Number);
+    if(p[0] === y) last = {m:p[1]-1, d:p[2]};
+  }
+  const from = ordinal(y,m,d), to = ordinal(y,last.m,last.d);
+  for(let mm=0; mm<12; mm++) for(let dd=1; dd<=mlen(y,mm); dd++){
+    const o = ordinal(y,mm,dd);
+    if(o < from || o > to) continue;
+    if(val === null){ setRec(y,mm,dd,null); continue; }
+    const t = dtype(y,mm,dd);
+    /* un rang només toca dies amb jornada: per registrar un cap de setmana o un
+       festiu treballat, obre aquell dia tot sol. El dia tocat sempre s'escriu. */
+    if(o !== from && TYPES[t].h === 0) continue;
+    /* amb hores automàtiques cada dia agafa la seva pròpia jornada (intensiva, divendres…) */
+    const h = (o === from || !val.auto) ? val.h : TYPES[t].h;
+    const v = {};
+    if(val.s) v.s = val.s;
+    if(h) v.h = h;
+    if(val.d) v.d = val.d;
+    if(val.n && o === from) v.n = val.n;
+    setRec(y,mm,dd, Object.keys(v).length ? v : null);
+  }
+  closeSheet(); render();
+}
+
+/* ───────────────────────── Ajustos ───────────────────────── */
+function openCfg(){
+  const y = YEAR, S = stats(y), c = yr(y).cfg;
+  openSheet(`
+    <div class="sh-hdr"><div class="sh-t">Ajustos — ${y}</div><button class="btn sm" id="shX">✕</button></div>
+    <div class="sh-sub">Teòriques del calendari: ${fmt(S.theoTot)} h · objectiu calculat: ${fmt(S.autoTarget)} h</div>
+    <div class="row2">
+      <div><div class="lbl">Bossa de vacances (h)</div><input class="fld" id="cVac" type="number" step="0.25" value="${c.vacH}"></div>
+      <div><div class="lbl">Romanent any anterior (h)</div><input class="fld" id="cCar" type="number" step="0.25" value="${c.carry}"></div>
+      <div><div class="lbl">Lliure disposició (h)</div><input class="fld" id="cLd" type="number" step="0.25" value="${c.ldH}"></div>
+      <div><div class="lbl">Objectiu manual (h)</div><input class="fld" id="cTgt" type="number" step="0.25" value="${c.target??""}" placeholder="auto"></div>
+    </div>
+    <div class="note">Segons el calendari signat del 2026: 1.890,00 h teòriques − 144,00 h de vacances = 1.746,00 h. Deixa l'objectiu manual buit perquè es calculi sol a partir dels dies que marquis.</div>
+    <div class="lbl">Sincronització</div>
+    <div class="chips">
+      ${signedIn ? `<button class="btn sm" id="syncNow">${needsAuth?"Torna a autoritzar":"Sincronitza ara"}</button>
+                    <button class="btn sm dgr" id="signOut">Desconnecta</button>`
+                 : `<button class="btn sm" id="signIn">Connecta amb Google Drive</button>`}
+    </div>
+    <div class="note">${
+        needsAuth ? "L'autorització de Google dura una hora. Els canvis d'ara es desen aquí i pujaran quan tornis a autoritzar."
+      : signedIn  ? "Connectat. Els canvis pugen sols un parell de segons després de fer-los, i en obrir l'app es baixa el que hagis fet en un altre dispositiu."
+      : "Sense connectar, les dades només viuen en aquest navegador."
+      }${syncErr ? " <b style=\"color:var(--red)\">"+esc(syncErr)+"</b>" : ""}</div>
+    <div class="lbl">Dades</div>
+    <div class="chips">
+      <button class="btn sm" id="exJson">Exporta còpia (JSON)</button>
+      <button class="btn sm" id="exCsv">Exporta CSV</button>
+      <button class="btn sm" id="imJson">Importa JSON</button>
+      <button class="btn sm dgr" id="wipe">Esborra l'any ${y}</button>
+    </div>
+    <input type="file" id="fileIn" accept="application/json" class="hide">
+    <div class="acts"><button class="btn pri" id="shOk">Desa</button></div>`);
+  $("shX").onclick = closeSheet;
+  $("shOk").onclick = () => {
+    const o = yr(y).cfg;
+    o.vacH = +$("cVac").value || 0; o.carry = +$("cCar").value || 0;
+    o.ldH  = +$("cLd").value  || 0;
+    const t = $("cTgt").value.trim(); o.target = t === "" ? null : +t;
+    yr(y).cfgT = Date.now();
+    save(); closeSheet(); render();
+  };
+  if($("signIn"))  $("signIn").onclick  = async () => { closeSheet(); await sync(true); openCfg(); };
+  if($("syncNow")) $("syncNow").onclick = async () => { closeSheet(); await sync(true); openCfg(); };
+  if($("signOut")) $("signOut").onclick = () => {
+    if(!confirm("Desconnectar de Drive? Les dades es queden en aquest dispositiu.")) return;
+    clearTok(); setSyncUI(); closeSheet(); openCfg();
+  };
+  $("exJson").onclick = () => dl("calendari-laboral-"+new Date().toISOString().slice(0,10)+".json",
+      JSON.stringify(DB,null,1), "application/json");
+  $("exCsv").onclick = () => {
+    let csv = "data;dia;tipus;h_teoriques;estat;h_fetes;destinacio;nota\n";
+    for(let m=0;m<12;m++) for(let d=1; d<=mlen(y,m); d++){
+      const t = dtype(y,m,d), r = rec(y,m,d) || {};
+      csv += [iso(y,m,d), WDAYS[wday(y,m,d)], t, String(TYPES[t].h).replace(".",","),
+              r.s||"", r.h?String(r.h).replace(".",","):"", r.d||"", (r.n||"").replace(/[;\n]/g," ")].join(";") + "\n";
+    }
+    dl("calendari-"+y+".csv", "﻿"+csv, "text/csv");
+  };
+  $("imJson").onclick = () => $("fileIn").click();
+  $("fileIn").onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      try{
+        const o = JSON.parse(fr.result);
+        if(!o || !o.years) throw new Error("format desconegut");
+        if(!confirm("Substituir totes les dades actuals per les del fitxer?")) return;
+        DB = o; save(); closeSheet(); syncYearSel(); render();
+      }catch(err){ alert("No s'ha pogut llegir el fitxer: "+err.message); }
+    };
+    fr.readAsText(f);
+  };
+  $("wipe").onclick = () => {
+    if(!confirm("Esborrar totes les marques del "+y+"? Els ajustos es mantenen.")) return;
+    yr(y).days = {}; save(); closeSheet(); render();
+  };
+}
+function dl(name, text, mime){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], {type:mime}));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ───────────────────────── Google Drive ─────────────────────────
+   Es fusiona dia a dia, no fitxer sencer: pots editar l'agost al mòbil i el
+   setembre a l'ordinador i no es trepitgen. Per a cada data guanya la versió
+   amb la marca de temps més alta. */
+function mergeDB(a, b){
+  const out = {v:1, years:{}};
+  const years = new Set([...Object.keys(a.years||{}), ...Object.keys(b.years||{})]);
+  years.forEach(y => {
+    const ay = (a.years||{})[y] || {}, by = (b.years||{})[y] || {};
+    const days = {}, keys = [...new Set([...Object.keys(ay.days||{}), ...Object.keys(by.days||{})])].sort();
+    keys.forEach(k => {
+      const ar = (ay.days||{})[k], br = (by.days||{})[k];
+      if(!ar || !br){ days[k] = ar || br; return; }
+      /* amb la mateixa marca de temps desempatem pel contingut, perquè els dos
+         dispositius arribin al mateix resultat i no s'estiguin trepitjant */
+      days[k] = (ar.t||0) !== (br.t||0) ? ((ar.t||0) > (br.t||0) ? ar : br)
+              : (JSON.stringify(ar) <= JSON.stringify(br) ? ar : br);
+    });
+    const newerA = (ay.cfgT||0) >= (by.cfgT||0);
+    out.years[y] = {days, cfgT: Math.max(ay.cfgT||0, by.cfgT||0),
+                    cfg: Object.assign(DEFCFG(), (newerA ? ay.cfg : by.cfg) || ay.cfg || by.cfg || {})};
+  });
+  return out;
+}
+function pruned(db){
+  const cut = Date.now() - TOMB_DAYS*864e5, out = {v:1, years:{}};
+  Object.entries(db.years||{}).forEach(([y,o]) => {
+    const days = {};
+    Object.entries(o.days||{}).forEach(([k,r]) => { if(!(r.del && (r.t||0) < cut)) days[k] = r; });
+    out.years[y] = Object.assign({}, o, {days});
+  });
+  return out;
+}
+
+function saveTok(){ try{ localStorage.setItem(KTOK, JSON.stringify({token, tokenExp, fileId})); }catch(e){} }
+function loadTok(){
+  try{
+    const t = JSON.parse(localStorage.getItem(KTOK)||"null"); if(!t) return false;
+    token = t.token; tokenExp = t.tokenExp||0; fileId = t.fileId||null;
+    rootId = localStorage.getItem(KROOT) || null;
+    return !!token;
+  }catch(e){ return false; }
+}
+function clearTok(){
+  token = null; tokenExp = 0; fileId = null; rootId = null; signedIn = false;
+  try{ localStorage.removeItem(KTOK); localStorage.removeItem(KROOT); }catch(e){}
+}
+function loadGIS(){
+  return new Promise(res => {
+    if(window.google && window.google.accounts) return res(true);
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.onload = () => res(true); s.onerror = () => res(false);
+    document.head.appendChild(s);
+  });
+}
+async function googleLogin(){
+  if(!await loadGIS() || !window.google || !window.google.accounts){
+    syncErr = "No s'ha pogut carregar Google Sign-In."; return null;
+  }
+  /* si el navegador bloqueja la finestra de Google el callback no arriba mai:
+     ho correm contra un temporitzador perquè sempre hi hagi resposta */
+  const opened = new Promise(res => {
+    google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: "https://www.googleapis.com/auth/drive.file",
+      callback: r => {
+        if(r.error){ res(null); return; }
+        token = r.access_token; tokenExp = Date.now() + (((r.expires_in||3600)-120)*1000);
+        saveTok(); res(token);
+      }
+    }).requestAccessToken({prompt:"consent"});
+  });
+  const out = await Promise.race([opened, new Promise(res => setTimeout(() => res("timeout"), 25000))]);
+  if(out === "timeout"){ syncErr = "L'accés no s'ha completat. Si s'ha bloquejat la finestra de Google, permet-la per a aquest lloc."; return null; }
+  if(!out) syncErr = "Accés cancel·lat.";
+  return out;
+}
+async function ensureToken(interactive){
+  if(token && Date.now() < tokenExp) return token;
+  /* «cal reautoritzar» només té sentit si abans hi havia sessió; si no n'hi ha
+     hagut mai, l'estat correcte és simplement «no connectat» */
+  if(!interactive){ if(signedIn) needsAuth = true; token = null; tokenExp = 0; return null; }
+  const t = await googleLogin();
+  if(t) needsAuth = false;
+  return t;
+}
+/* Un 401 s'ha de propagar, no confondre's amb «no hi ha res»: si no, una sessió
+   caducada semblaria un Drive buit i acabaríem creant un fitxer duplicat. */
+function authFail(){ token = null; tokenExp = 0; needsAuth = true; const e = new Error("auth"); e.auth = 1; return e; }
+async function dget(url){
+  const r = await fetch(url, {headers:{Authorization:"Bearer "+token}});
+  if(r.status === 401 || r.status === 403) throw authFail();
+  return r;
+}
+async function getRootId(){
+  if(rootId) return rootId;
+  const MIME = "application/vnd.google-apps.folder";
+  const q = "name="+JSON.stringify(ROOT_NAME)+" and trashed=false and mimeType="+JSON.stringify(MIME);
+  const r = await dget("https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent(q)+"&fields=files(id)");
+  if(r.ok){ const d = await r.json(); if(d.files && d.files.length) rootId = d.files[0].id; }
+  if(!rootId){
+    const c = await fetch("https://www.googleapis.com/drive/v3/files", {method:"POST",
+      headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+      body: JSON.stringify({name:ROOT_NAME, mimeType:MIME})});
+    if(c.status === 401 || c.status === 403) throw authFail();
+    if(c.ok) rootId = (await c.json()).id;
+  }
+  if(rootId) try{ localStorage.setItem(KROOT, rootId); }catch(e){}
+  return rootId;
+}
+async function findDataFile(){
+  const q = "name="+JSON.stringify(DATA_FILE)+" and trashed=false";
+  const r = await dget("https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent(q)+"&fields=files(id)");
+  if(r.ok){ const d = await r.json(); if(d.files && d.files.length) return d.files[0].id; }
+  return null;
+}
+/** Baixa, fusiona amb el que hi ha aquí i torna a pujar si el local aportava res. */
+async function sync(interactive){
+  if(syncing) return;
+  syncing = true; syncErr = ""; setSyncUI();
+  try{
+    if(!await ensureToken(interactive)){ if(!needsAuth) signedIn = false; setSyncUI(); return; }
+    signedIn = true; needsAuth = false;
+    if(!fileId) fileId = await findDataFile();
+    let remote = null;
+    if(fileId){
+      const r = await dget("https://www.googleapis.com/drive/v3/files/"+fileId+"?alt=media");
+      if(r.ok) remote = await r.json();
+      else if(r.status === 404) fileId = null;
+      else { syncErr = "Error llegint de Drive ("+r.status+")."; setSyncUI(); return; }
+    }
+    if(remote && remote.years) DB = mergeDB(DB, remote);
+    try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){}
+    await push();
+    lastSync = Date.now();
+    render();
+  }catch(e){
+    syncErr = e.auth ? "Cal tornar a autoritzar l'accés a Drive."
+                     : "Sense connexió — les dades queden desades aquí.";
+  }
+  finally{ syncing = false; saveTok(); setSyncUI(); }
+}
+async function push(){
+  const body = JSON.stringify(pruned(DB));
+  let r;
+  if(fileId){
+    r = await fetch("https://www.googleapis.com/upload/drive/v3/files/"+fileId+"?uploadType=media",
+      {method:"PATCH", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body});
+    if(r.status === 401 || r.status === 403) throw authFail();
+    if(r.status === 404) fileId = null;
+  }
+  if(!fileId){
+    const parent = await getRootId();
+    const meta = JSON.stringify({name:DATA_FILE, mimeType:"application/json", parents: parent?[parent]:[]});
+    const bnd = "cal_"+Date.now();
+    const mp = "--"+bnd+"\r\nContent-Type: application/json\r\n\r\n"+meta
+             + "\r\n--"+bnd+"\r\nContent-Type: application/json\r\n\r\n"+body+"\r\n--"+bnd+"--";
+    r = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+      {method:"POST", headers:{Authorization:"Bearer "+token,"Content-Type":"multipart/related; boundary="+bnd}, body:mp});
+    if(r.status === 401 || r.status === 403) throw authFail();
+    if(r.ok) fileId = (await r.json()).id;
+  }
+  if(!r || !r.ok) syncErr = "No s'ha pogut desar a Drive.";
+  saveTok();
+}
+/* Un rang pot escriure trenta dies seguits: agrupem-ho en una sola pujada. */
+function schedulePush(){
+  if(!signedIn) return;
+  pushPending = true;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(async () => {
+    if(syncing || !pushPending) return;
+    pushPending = false; syncing = true; setSyncUI();
+    try{
+      /* si el testimoni ha caducat, ensureToken marca needsAuth i els canvis
+         es queden aquí fins que autoritzis: no es perd res */
+      if(await ensureToken(false)){ await push(); lastSync = Date.now(); }
+    }catch(e){
+      syncErr = e.auth ? "Cal tornar a autoritzar l'accés a Drive."
+                       : "Sense connexió — les dades queden desades aquí.";
+    }
+    finally{ syncing = false; setSyncUI(); }
+  }, 2000);
+}
+function setSyncUI(){
+  const b = $("btnSync"); if(!b) return;
+  /* needsAuth va abans que l'error: és l'estat accionable, i el símbol ha de dir
+     «toca aquí» en comptes de només «alguna cosa ha anat malament» */
+  const st = syncing   ? ["◍","var(--gold)","Sincronitzant…"]
+           : needsAuth ? ["◐","var(--gold)","Cal tornar a autoritzar l'accés a Drive — toca aquí"]
+           : syncErr   ? ["●","var(--red)", syncErr]
+           : signedIn  ? ["●","var(--green)","Drive · "+(lastSync?new Date(lastSync).toLocaleTimeString("ca-ES",{hour:"2-digit",minute:"2-digit"}):"connectat")]
+           : ["○","var(--tx3)","Només en aquest dispositiu — toca per connectar amb Drive"];
+  b.textContent = st[0]; b.style.color = st[1]; b.title = st[2];
+}
+
+/* ───────────────────────── Arrencada ───────────────────────── */
+function syncYearSel(){
+  const sel = $("yearSel"), ys = new Set([2026, YEAR, new Date().getFullYear()]);
+  Object.keys(DB.years).forEach(y => ys.add(+y));
+  const list = [...ys].sort();
+  list.unshift(list[0]-1); list.push(list[list.length-1]+1);
+  sel.innerHTML = [...new Set(list)].map(y => `<option value="${y}"${y===YEAR?" selected":""}>${y}</option>`).join("");
+}
+function setTheme(light){
+  document.documentElement.classList.toggle("light", light);
+  $("btnTheme").textContent = light ? "☀️" : "🌙";
+  document.querySelector('meta[name=theme-color]').content = light ? "#ffffff" : "#111827";
+  try{ localStorage.setItem(KTHM, light ? "l" : "d"); }catch(e){}
+}
+function init(){
+  load();
+  const now = new Date();
+  YEAR = CAL[now.getFullYear()] ? now.getFullYear() : 2026;
+  MONTH = (now.getFullYear() === YEAR) ? now.getMonth() : 0;
+  setTheme((()=>{ try{ return localStorage.getItem(KTHM) === "l"; }catch(e){ return false; } })());
+  syncYearSel();
+  $("yearSel").onchange = e => { YEAR = +e.target.value; render(); };
+  $("btnTheme").onclick = () => { setTheme(!document.documentElement.classList.contains("light")); render(); };
+  $("btnCfg").onclick   = openCfg;
+  $("btnSync").onclick  = () => sync(true);
+  $("scrim").onclick    = closeSheet;
+  document.querySelectorAll(".tab").forEach(t => t.onclick = () => { VIEW = t.dataset.v; render(); });
+  document.addEventListener("keydown", e => { if(e.key === "Escape") closeSheet(); });
+  render();
+
+  /* si ja hi havia sessió, baixem el que s'hagi fet en un altre dispositiu */
+  const had = loadTok();
+  signedIn = had; needsAuth = had && Date.now() >= tokenExp;
+  setSyncUI();
+  if(had) sync(false);
+  /* i tornem a mirar en tornar a l'app o cada 5 min amb la pestanya oberta */
+  document.addEventListener("visibilitychange", () => {
+    if(!document.hidden && signedIn && Date.now() - lastSync > 60000) sync(false);
+  });
+  setInterval(() => { if(signedIn && !syncing && !pushPending) sync(false); }, 300000);
+}
+init();
+</script>
+</body>
+</html>
