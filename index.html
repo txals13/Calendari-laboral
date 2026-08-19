@@ -602,7 +602,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 /* ── Desplegables ──
    Al mòbil el navegador els mostra com una roda; a l'ordinador estalvien haver
    d'escriure l'hora dígit a dígit. */
-function optsHora(sel, de=4, a=23, pas=15){
+function optsHora(sel, de=0, a=23, pas=15){
   let o = `<option value=""${sel?"":" selected"}>—</option>`, trobat = false;
   for(let h=de; h<=a; h++) for(let m=0; m<60; m+=pas){
     const v = pad(h)+":"+pad(m);
