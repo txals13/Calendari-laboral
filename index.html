@@ -315,15 +315,18 @@ function stats(y){
         if(r.s === "VAC"){ M.vac += th; S.vacH += th; if(past) S.vacYTD += th; }
         if(r.s === "LD" ){ M.ld  += th; S.ldH  += th; if(past) S.ldYTD  += th; }
       }
+      /* els dies fora es compten en dies naturals: un diumenge a l'estranger no
+         té hores però hi ets igual, així que compta com a dia de desplaçament */
+      if(r.d){
+        const k = r.d.toUpperCase();
+        S.dest[k] = S.dest[k] || {days:0, worked:0, hours:0};
+        S.dest[k].days++;
+        if(h > 0){ S.dest[k].worked++; S.dest[k].hours += h; }
+      }
       if(h > 0){
         M.days++; S.worked++;
         if(t === "X") S.capsSetmana++;
         if(t === "F") S.festiusTreballats++;
-        if(r.d){
-          const k = r.d.toUpperCase();
-          S.dest[k] = S.dest[k] || {days:0, hours:0};
-          S.dest[k].days++; S.dest[k].hours += h;
-        }
       }
     }
     M.target = M.theo - M.vac - M.ld;
@@ -454,8 +457,8 @@ function viewSum(){
 function viewTrv(){
   const y = YEAR, S = stats(y);
   const ks = Object.keys(S.dest).sort((a,b) => S.dest[b].days - S.dest[a].days);
-  const rows = ks.length ? ks.map(k => `<tr><td>${esc(k)}</td><td>${S.dest[k].days}</td><td>${fmt(S.dest[k].hours)}</td></tr>`).join("")
-                         : `<tr><td colspan="3" class="dim" style="text-align:left">Cap destinació registrada encara.</td></tr>`;
+  const rows = ks.length ? ks.map(k => `<tr><td>${esc(k)}</td><td>${S.dest[k].days}</td><td class="dim">${S.dest[k].worked}</td><td>${fmt(S.dest[k].hours)}</td></tr>`).join("")
+                         : `<tr><td colspan="4" class="dim" style="text-align:left">Cap destinació registrada encara.</td></tr>`;
   /* estades = trams consecutius amb la mateixa destinació */
   const trips = [];
   let cur = null;
@@ -473,8 +476,8 @@ function viewTrv(){
   return `
   <div class="card">
     <div class="card-t">Dies per destinació — ${y}</div>
-    <table><thead><tr><th>Destinació</th><th>Dies</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). Només compten els dies amb hores registrades.</div>
+    <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). <b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius. <b>Treballats</b> són els que tenen hores.</div>
   </div>
   <div class="card">
     <div class="card-t">Estades</div>
@@ -599,7 +602,7 @@ function openDay(d){
         <input class="fld" id="untilIn" type="date" min="${iso(y,m,d)}" max="${y}-12-31"></div>
     </div>
     <div><div class="lbl">Nota</div><input class="fld" id="nIn" maxlength="120" value="${esc(r.n||"")}" placeholder="opcional"></div>
-    <div class="note">«Aplica fins a» repeteix estat, hores i destinació a tots els dies del rang. Els dies sense jornada (caps de setmana, festius) es deixen intactes tret que hi posis hores.</div>
+    <div class="note">«Aplica fins a» repeteix estat, hores i destinació a tots els dies del rang. Els desplaçaments (estranger, nacional, previst) marquen també caps de setmana i festius, a zero hores. La resta d'estats només toquen dies amb jornada.</div>
     <div class="acts">
       <button class="btn dgr" id="shDel">Esborra</button>
       <button class="btn pri" id="shOk">Desa</button>
@@ -647,11 +650,18 @@ function applyRange(val){
     if(o < from || o > to) continue;
     if(val === null){ setRec(y,mm,dd,null); continue; }
     const t = dtype(y,mm,dd);
-    /* un rang només toca dies amb jornada: per registrar un cap de setmana o un
-       festiu treballat, obre aquell dia tot sol. El dia tocat sempre s'escriu. */
-    if(o !== from && TYPES[t].h === 0) continue;
-    /* amb hores automàtiques cada dia agafa la seva pròpia jornada (intensiva, divendres…) */
-    const h = (o === from || !val.auto) ? val.h : TYPES[t].h;
+    /* Un desplaçament es compta en dies naturals: si ets fora, hi ets també el
+       cap de setmana i els festius. La resta d'estats (HQ, vacances, lliure
+       disposició) només toquen dies amb jornada; per registrar un cap de setmana
+       treballat a la seu, obre aquell dia tot sol. El dia tocat sempre s'escriu. */
+    const away = ["EST","NAC","POS"].includes(val.s);
+    if(o !== from && TYPES[t].h === 0 && !away) continue;
+    /* amb hores automàtiques cada dia agafa la seva pròpia jornada (intensiva,
+       divendres…); els dies sense jornada queden marcats però a zero hores —
+       hi ets, però no hi treballes tret que ho posis tu */
+    const h = o === from ? val.h
+            : TYPES[t].h === 0 ? 0
+            : val.auto ? TYPES[t].h : val.h;
     const v = {};
     if(val.s) v.s = val.s;
     if(h) v.h = h;
