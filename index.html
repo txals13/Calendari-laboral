@@ -419,16 +419,20 @@ function horesDia(r){
 /** Hores previstes: el que hagi escrit l'usuari; si no, la jornada del calendari. */
 const previstes = (y,m,d,r) => (r && r.prev != null && r.prev !== "") ? (+r.prev || 0) : theo(y,m,d);
 
-/** Càlcul d'un dia. `fest` (previstes = 0) marca cap de setmana o festiu. */
-function payDay(y,m,d,P){
-  const r = rec(y,m,d);
+/** Càlcul d'un dia a partir d'un registre concret: així es pot fer servir tant
+    amb el que hi ha desat com amb el que estàs escrivint al formulari. */
+function calcDia(y,m,d,r,P){
   if(!r) return null;
   const h = horesDia(r), prev = previstes(y,m,d,r), fest = prev === 0;
-  const extra = Math.max(0, r2(h - prev));
+  /* vacances, lliure disposició, descans compensat i viatges previstos no es
+     treballen: encara que hi quedi un fitxatge, no generen extres ni dieta */
+  const noEsTreballa = ["VAC","LD","DC","POS"].includes(r.s);
+  const extra = noEsTreballa ? 0 : Math.max(0, r2(h - prev));
   const via = (STATES[r.s]||{}).v || "-";
   const descans = r.c === "D";                       /* extra compensada en descans */
   let dieta = 0;
-  if(via === "I") dieta = fest ? P.intlFest : P.intlLab;
+  if(noEsTreballa) dieta = 0;
+  else if(via === "I") dieta = fest ? P.intlFest : P.intlLab;
   else if(via === "N") dieta = P.esmorzar + P.dinar + P.sopar
                              + (fest ? P.capSetmana : P.pernocta) + (+r.km||0) * P.kmEur;
   return {
@@ -440,6 +444,30 @@ function payDay(y,m,d,P){
        o si hi has registrat hores; un laborable buit queda fora */
     computable: fest || h > 0
   };
+}
+function payDay(y,m,d,P){ return calcDia(y,m,d,rec(y,m,d),P); }
+
+/** Diners que genera un dia. És la part variable —extres pagades i dieta—, que
+    és el que fa el full a la columna "Total dia". El salari fix no és diari.
+    El net és una estimació: hi apliquem la SS que toca a cada concepte i el
+    tipus d'IRPF sobre la part no exempta, sense mirar el topall del mes. */
+function eurosDia(y,m,d,r,P,tipus){
+  const x = calcDia(y,m,d,r,P);
+  if(!x) return null;
+  const hOrd = P.horesAny > 0 ? P.salari / P.horesAny : 0;
+  const hExtra = hOrd * (1 + P.incrExtra);
+  const extraEur = r2(x.extraPagada * hExtra);
+  const brut = r2(extraEur + x.dieta);
+  const intl = x.via === "I";
+  const exempt = !P.art7p ? 0 : r2((P.art7pExtres && intl ? extraEur : 0) + (P.art7pDietes && intl ? x.dieta : 0));
+  const subjecte = r2(brut - exempt);
+  /* les dietes entren a totes dues bases; les extres, fora de la de contingències
+     comunes però amb la seva quota addicional */
+  const ssExtres = extraEur * (P.ssAtur + P.ssFP + (P.forcaMajor ? P.ssExtraFM : P.ssExtra));
+  const ssDietes = x.dieta * (P.ssCC + P.ssMEI + P.ssAtur + P.ssFP);
+  const ss = r2(ssExtres + ssDietes);
+  const irpf = r2(subjecte * (tipus != null ? tipus : irpfRate(y)));
+  return {dia:x, extraEur, brut, exempt, subjecte, ss, irpf, net: r2(brut - ss - irpf), hExtra};
 }
 
 /** Dies naturals d'un mes dins del període de contracte. Un mes d'alta parcial
@@ -1075,6 +1103,7 @@ function openDay(d){
       <button class="stb${r.c!=="D"?" on":""}" data-c="P">Pagades<small>+${fmt((yr(y).pay.incrExtra||0)*100)} %</small></button>
       <button class="stb${r.c==="D"?" on":""}" data-c="D">En descans<small>a la bossa d'hores</small></button>
     </div>
+    <div class="card" id="diaCalc" style="margin:12px 0 0;padding:10px 12px"></div>
     <div class="row2">
       <div><div class="lbl">Destinació</div>
         <input class="fld" id="dIn" list="dl" maxlength="6" placeholder="CA, PL…" value="${esc(r.d||"")}" style="text-transform:uppercase">
@@ -1105,6 +1134,7 @@ function openDay(d){
       if(["VAC","LD","POS"].includes(b.dataset.s)){ hIn.value = ""; autoH = false; }
       else if(!hIn.value || autoH) setAuto(th || 8);
     }
+    pintaCalc();
   });
   const step = k => { const v = Math.max(0, r2((+hIn.value||0) + k)); if(v) assegurarOpcio(hIn, v); else hIn.value = ""; autoH = false; };
   $("hMinus").onclick = () => step(-0.25);
@@ -1113,6 +1143,7 @@ function openDay(d){
   $("cmp").querySelectorAll(".stb").forEach(b => b.onclick = () => {
     $("cmp").querySelectorAll(".stb").forEach(x => x.classList.remove("on"));
     b.classList.add("on");
+    pintaCalc();
   });
   /* el fitxatge mana sobre el camp d'hores: si hi ha inici i fi, el total surt d'aquí */
   const llegeixFitxatge = () => ({
@@ -1129,10 +1160,55 @@ function openDay(d){
       nota.textContent = `Del fitxatge: ${fmt(v)} h`;
     } else nota.textContent = "";
   };
+  /* El tipus d'IRPF recorre tot l'any: el calculem un cop en obrir la fitxa. */
+  const tipusIRPF = irpfRate(y);
+  const P = yr(y).pay;
+  /** Estat actual del formulari, com si fos un registre desat. */
+  const registreForm = () => {
+    const F = llegeixFitxatge();
+    const v = {i:F.i, f:F.f, p:F.p, h:+hIn.value || 0, km:+$("kmIn").value || 0,
+               d:$("dIn").value.trim().toUpperCase(),
+               s:($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "",
+               c:($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P"};
+    if($("prevIn").value !== "") v.prev = +$("prevIn").value;
+    return v;
+  };
+  const pintaCalc = () => {
+    const E = eurosDia(y,m,d,registreForm(),P,tipusIRPF);
+    const S = stats(y);
+    const box = $("diaCalc");
+    if(!E){ box.innerHTML = ""; return; }
+    const x = E.dia;
+    /* l'acumulat de stats() surt del que hi ha DESAT: hi canviem el que aquest
+       dia hi aportava per el que hi aportaria amb el que tens escrit ara */
+    const desat = calcDia(y,m,d,rec(y,m,d),P);
+    const compta = q => q && !["VAC","LD","DC","POS"].includes((registreForm().s)||"") ? q.extra : 0;
+    const acumulat = Math.max(0, r2(S.extra - (desat ? desat.extra : 0) + compta(x)));
+    const fila = (l,v,cls) => `<div style="display:flex;justify-content:space-between;gap:10px">
+      <span class="note" style="margin:0">${l}</span><b class="${cls||""}" style="font-family:monospace">${v}</b></div>`;
+    box.innerHTML =
+      fila("Hores extres del dia", fmt(x.extra) + " h", x.extra ? "pos" : "dim")
+    + fila("Acumulades l'any, amb aquesta", fmt(acumulat) + " h", "dim")
+    + `<div style="height:6px"></div>`
+    + fila("Brut del dia", eur(E.brut) + " €")
+    + (E.exempt ? fila("exempt art. 7.p", eur(E.exempt) + " €", "dim") : "")
+    + fila("− SS i IRPF", eur(E.ss + E.irpf) + " €", "neg")
+    + fila("Net del dia", eur(E.net) + " €", "pos")
+    + `<div class="note" style="margin-top:6px">${
+        x.descans ? "Les extres van a la bossa de descans, així que no es paguen."
+        : x.extra ? "Extres a " + eur(E.hExtra) + " €/h" + (x.dieta ? " · dieta " + eur(x.dieta) + " €" : "")
+        : x.dieta ? "Només dieta: " + eur(x.dieta) + " €"
+        : "Sense extres ni dieta: aquest dia no genera part variable."}</div>`;
+  };
   ["iH","iM","fH","fM","pIn"].forEach(id =>
     ["input","change"].forEach(ev => $(id).addEventListener(ev, syncH)));
+  /* qualsevol camp que canviï els diners repinta el resum; els botons d'estat i
+     de compensació el criden ells mateixos, just després de moure la classe */
+  $("sheet").addEventListener("change", pintaCalc);
+  $("sheet").addEventListener("input", pintaCalc);
   obreCalendari($("untilIn"));
   syncH();
+  pintaCalc();
   $("shDel").onclick  = () => { applyRange(null); };
   $("shOk").onclick   = () => {
     const s = ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "";
