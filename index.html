@@ -314,6 +314,15 @@ const fmtH = n => n ? (Math.round(n*100)/100).toLocaleString("ca-ES",{maximumFra
 const deMes = m => ("aeiou".includes(MONTHS[m][0].toLowerCase()) ? "d'" : "de ") + MONTHS[m].toLowerCase();
 const sgn  = n => (n>=0?"+":"−") + fmt(Math.abs(n));
 
+/** Un dia és dins del contracte? Els de fora no compten per a l'objectiu: si
+    entres el 24 d'agost, l'agost no et pot demanar les hores de tot el mes. */
+function dinsContracte(y,m,d,P){
+  const t = new Date(y,m,d).setHours(0,0,0,0);
+  if(P.contracteIni){ const a = new Date(P.contracteIni+"T00:00:00"); if(!isNaN(a) && t < a.setHours(0,0,0,0)) return false; }
+  if(P.contracteFi){  const b = new Date(P.contracteFi +"T00:00:00"); if(!isNaN(b) && t > b.setHours(0,0,0,0)) return false; }
+  return true;
+}
+
 /* ───────────────────────── Agregats ───────────────────────── */
 function stats(y){
   const o = yr(y), today = new Date();
@@ -329,11 +338,14 @@ function stats(y){
   for(let m=0;m<12;m++){
     const M = {theo:0, done:0, vac:0, ld:0, days:0, extra:0, curt:0};
     for(let d=1; d<=mlen(y,m); d++){
-      const t = dtype(y,m,d), th = TYPES[t].h, r = rec(y,m,d);
+      const t = dtype(y,m,d), r = rec(y,m,d);
+      /* fora del contracte la jornada no et compta com a objectiu */
+      const dins = dinsContracte(y,m,d,o.pay);
+      const th = dins ? TYPES[t].h : 0;
       const past = ordinal(y,m,d) <= todayOrd;
       M.theo += th; S.theoTot += th;
-      if(t === "B") S.ponts++;
-      if(t === "F") S.festius++;
+      if(dins && t === "B") S.ponts++;
+      if(dins && t === "F") S.festius++;
       if(past) S.theoYTD += th;
       if(!r) continue;
       const h = horesDia(r);   /* si hi ha fitxatge, mana el fitxatge */
@@ -1591,7 +1603,12 @@ function init(){
   /* Service worker: fa que l'app obri sense connexió. Ha de ser un fitxer de
      debò servit per http(s); des d'un blob: el navegador el rebutja. */
   if("serviceWorker" in navigator){
-    addEventListener("load", () => navigator.serviceWorker.register("./sw.js", {scope:"./"}).catch(() => {}));
+    /* updateViaCache:"none" evita que el propi sw.js se serveixi de la memòria
+       cau HTTP; update() força a buscar-ne una versió nova en cada obertura. */
+    addEventListener("load", () => navigator.serviceWorker
+      .register("./sw.js", {scope:"./", updateViaCache:"none"})
+      .then(reg => reg.update().catch(() => {}))
+      .catch(() => {}));
   }
   /* si ja hi havia sessió, baixem el que s'hagi fet en un altre dispositiu */
   const had = loadTok();
