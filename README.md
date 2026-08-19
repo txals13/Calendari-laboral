@@ -36,9 +36,22 @@ gasta hores de la bossa. La imputació és FIFO i caduca als 2 mesos.
 
 **Mesos d'alta parcial.** El període de contracte es posa als paràmetres (inici i,
 si escau, fi). El mes en què entres o surts no cobra sencer: el salari, la base de
-cotització i el topall van prorratejats per dies naturals, i les pagues extres pels
-dies d'alta de l'any. Amb l'alta el 24 d'agost, l'agost cobra 8/31 del salari i el
-juliol no cobra res.
+cotització i el topall van prorratejats, i les pagues extres pels dies d'alta de
+l'any. Els mesos anteriors a l'alta no meriten res.
+
+El **divisor del mes** és un paràmetre. Per defecte **30**, que és la convenció
+espanyola per a salari mensual: el mes de salari són 30 dies tant si el mes real
+en té 28 com 31. Posant-hi 0 es fan servir els dies reals del mes. Amb l'alta el
+24 d'agost (8 dies naturals):
+
+| Divisor | Salari d'agost |
+|---|---|
+| 30 (per defecte) | 895,24 € |
+| 30,4167 (365/12) | 882,97 € |
+| dies reals (31) | 866,36 € |
+
+En un mes sencer el factor es limita a 1, així que un mes de 31 dies amb divisor
+30 no cobra de més.
 
 L'**IRPF** té dos modes. `AUTO` reprodueix l'algoritme de retencions de l'AEAT a
 partir de les retribucions previsibles de l'any: els mesos que tinguis registrats

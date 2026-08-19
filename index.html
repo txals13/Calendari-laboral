@@ -233,7 +233,7 @@ const DEFPAY = () => ({
   /* dades personals per a l'algoritme de retencions de l'AEAT */
   situacio:3, edat:45, discap:0, ajudaTercers:false, descend:0, descend3:0, descend50:true,
   ascend:0, ascend75:0, pensioConjuge:0, aliments:0, mobilitat:false,
-  contracteIni:"2026-08-24", contracteFi:"",
+  contracteIni:"2026-08-24", contracteFi:"", diesMesProrrata:30,
   art7p:true, art7pSalari:true, art7pExtres:true, art7pDietes:true, art7pLimit:60100
 });
 let DB = {v:1, years:{}};
@@ -458,10 +458,14 @@ function payMonth(y,m,noIrpf){
 
   const sum = f => dies.reduce((a,x) => a + f(x), 0);
   const M = {dies, hores:r2(sum(x=>x.h)), extraTot:r2(sum(x=>x.extra))};
-  /* prorrateig per dies d'alta: el mes en què entres o surts no es cobra sencer */
+  /* Prorrateig per dies d'alta: el mes en què entres o surts no es cobra sencer.
+     El divisor és 30 per convenció de salari mensual, no els dies reals del mes
+     (a Espanya el mes de salari són 30 dies tingui'n 28 o 31). Amb
+     diesMesProrrata = 0 es fan servir els dies reals. */
   M.diesMes  = mlen(y,m);
   M.diesAlta = diesAlta(y,m,P);
-  M.factor   = M.diesMes > 0 ? M.diesAlta / M.diesMes : 0;
+  M.divisor  = (+P.diesMesProrrata > 0) ? +P.diesMesProrrata : M.diesMes;
+  M.factor   = M.divisor > 0 ? Math.min(1, M.diesAlta / M.divisor) : 0;
   M.salari    = r2(P.salari / P.pagues * M.factor);
   M.extraNacH = r2(sum(x => x.via !== "I" ? x.extraPagada : 0));
   M.extraIntH = r2(sum(x => x.via === "I" ? x.extraPagada : 0));
@@ -746,7 +750,7 @@ function viewNom(){
       <div class="s">${fmt(M.extraNacH+M.extraIntH)} pagades · ${fmt(M.generat)} h a la bossa</div></div>
   </div>
   <div class="card"><div class="card-t">A · Meritació bruta</div><table>
-    ${li("Salari de la paga mensual" + (M.factor < 1 ? ` (${M.diesAlta}/${M.diesMes} dies)` : ""), eur(M.salari))}
+    ${li("Salari de la paga mensual" + (M.factor < 1 ? ` (${M.diesAlta}/${fmt0(M.divisor)} dies)` : ""), eur(M.salari))}
     ${M.pagaExtra ? li("Paga extra" + (M.propAlta < 1 ? ` (${fmt(M.propAlta*100)} % de l'any)` : ""), eur(M.pagaExtra)) : ""}
     ${li("H. extres pagades — dies nacionals", eur(M.extraNac))}
     ${li("H. extres pagades — dies internacionals", eur(M.extraInt))}
@@ -754,7 +758,7 @@ function viewNom(){
     ${li("Dietes internacionals", eur(M.dietaInt))}
     <tfoot><tr><td style="text-align:left">TOTAL BRUT</td><td>${eur(M.brut)}</td></tr></tfoot></table>
     <div class="note">Hora ordinària ${eur(hOrd)} €/h · hora extra ${eur(hOrd*(1+P.incrExtra))} €/h${
-      M.factor < 1 ? ` · <b>mes d'alta parcial:</b> ${M.diesAlta} de ${M.diesMes} dies, així que el salari, la base de cotització i el topall van prorratejats.` : ""}</div></div>
+      M.factor < 1 ? ` · <b>mes d'alta parcial:</b> ${M.diesAlta} dies d'alta sobre un divisor de ${fmt0(M.divisor)}, així que el salari, la base de cotització i el topall van prorratejats.` : ""}</div></div>
   <div class="card"><div class="card-t">B · Exempció art. 7.p</div><table>
     ${li("Dies computables", M.diesComp)}
     ${li("Dies internacionals", M.diesIntl)}
@@ -1083,14 +1087,22 @@ function openCfg(){
   const y = YEAR, S = stats(y), c = yr(y).cfg;
   openSheet(`
     <div class="sh-hdr"><div class="sh-t">Ajustos — ${y}</div><button class="btn sm" id="shX">✕</button></div>
-    <div class="sh-sub">Teòriques del calendari: ${fmt(S.theoTot)} h · objectiu calculat: ${fmt(S.autoTarget)} h</div>
+    <div class="sh-sub">Teòriques del calendari: ${fmt(S.theoTot)} h · objectiu actual: ${fmt(S.autoTarget)} h</div>
+    <div class="note" style="margin:-8px 0 4px">${
+      S.vacH + S.ldH === 0
+      ? `Encara no has marcat cap dia de vacances, així que no hi ha res a descomptar de les ${fmt(S.theoTot)} h.
+         Quan hi marquis els ${fmt((+c.vacH||0)+(+c.carry||0))} h de la bossa, l'objectiu baixarà als
+         <b>${fmt(S.theoTot - (+c.vacH||0) - (+c.carry||0))} h</b> del conveni.`
+      : `${fmt(S.theoTot)} h − ${fmt(S.vacH)} h de vacances${S.ldH?` − ${fmt(S.ldH)} h de lliure disposició`:""} marcades al calendari.`
+    }</div>
     <div class="row2">
       <div><div class="lbl">Bossa de vacances (h)</div><input class="fld" id="cVac" type="number" step="0.25" value="${c.vacH}"></div>
       <div><div class="lbl">Romanent any anterior (h)</div><input class="fld" id="cCar" type="number" step="0.25" value="${c.carry}"></div>
       <div><div class="lbl">Lliure disposició (h)</div><input class="fld" id="cLd" type="number" step="0.25" value="${c.ldH}"></div>
       <div><div class="lbl">Objectiu manual (h)</div><input class="fld" id="cTgt" type="number" step="0.25" value="${c.target??""}" placeholder="auto"></div>
     </div>
-    <div class="note">Segons el calendari signat del 2026: 1.890,00 h teòriques − 144,00 h de vacances = 1.746,00 h. Deixa l'objectiu manual buit perquè es calculi sol a partir dels dies que marquis.</div>
+    <div class="note">L'objectiu es calcula sol: hores de jornada del calendari menys les dels dies que marquis com a vacances o lliure disposició. Omple l'objectiu manual només si vols fixar-lo tu.
+      <br>Les <b>${fmt(yr(y).pay.horesAny)} h</b> que fa servir la nòmina per calcular l'hora ordinària són una altra cosa: la xifra fixa del conveni, i es canvia als paràmetres de nòmina.</div>
     <div class="lbl">Sincronització</div>
     <div class="chips">
       ${signedIn ? `<button class="btn sm" id="syncNow">${needsAuth?"Torna a autoritzar":"Sincronitza ara"}</button>
@@ -1158,7 +1170,8 @@ function openCfg(){
 }
 /* ── Paràmetres de nòmina ── */
 const PAYFIELDS = [
-  ["Salari i jornada", [["salari","Salari brut anual (€)",1],["pagues","Nº pagues",1],["horesAny","Hores anuals conveni",1]]],
+  ["Salari i jornada", [["salari","Salari brut anual (€)",1],["pagues","Nº pagues",1],["horesAny","Hores anuals conveni",1],
+     ["diesMesProrrata","Divisor del mes (30 estàndard · 0 = dies reals)",.0001]]],
   ["Dietes nacionals (€)", [["esmorzar","Esmorzar",.01],["dinar","Dinar",.01],["sopar","Sopar",.01],
      ["pernocta","Compl. pernocta",.01],["capSetmana","Compl. cap de setmana/festiu",.01],["kmEur","€ per km",.01]]],
   ["Dietes internacionals (€)", [["intlLab","Dia laborable",.01],["intlFest","Dia cap de setmana/festiu",.01]]],
