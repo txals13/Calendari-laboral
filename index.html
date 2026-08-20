@@ -466,8 +466,21 @@ function eurosDia(y,m,d,r,P,tipus){
   const ssExtres = extraEur * (P.ssAtur + P.ssFP + (P.forcaMajor ? P.ssExtraFM : P.ssExtra));
   const ssDietes = x.dieta * (P.ssCC + P.ssMEI + P.ssAtur + P.ssFP);
   const ss = r2(ssExtres + ssDietes);
-  const irpf = r2(subjecte * (tipus != null ? tipus : irpfRate(y)));
-  return {dia:x, extraEur, brut, exempt, subjecte, ss, irpf, net: r2(brut - ss - irpf), hExtra};
+  const tp = tipus != null ? tipus : irpfRate(y);
+  const irpf = r2(subjecte * tp);
+  const net = r2(brut - ss - irpf);
+  /* L'art. 7.p no exempta només les extres i la dieta del dia: també la part
+     proporcional del SALARI FIX (salari × dies internacionals / dies
+     computables). Repartida per dies, a cada dia internacional li toca una
+     dotzena part llarga del sou, i l'estalvi d'IRPF que això suposa és més gran
+     que tota la resta junta. Sense això, comparar nacional i estranger enganya. */
+  const Mm = payMonth(y,m,true);
+  const jaHiEs = !!rec(y,m,d);
+  const diesComp = Math.max(1, Mm.diesComp + (jaHiEs || !x.computable ? 0 : 1));
+  const exSalari = (intl && P.art7p && P.art7pSalari) ? r2(Mm.salari / diesComp) : 0;
+  const estalviIRPF = r2(exSalari * tp);
+  return {dia:x, extraEur, brut, exempt, subjecte, ss, irpf, net, hExtra,
+          exSalari, estalviIRPF, efecte: r2(net + estalviIRPF), diesComp};
 }
 
 /** Dies naturals d'un mes dins del període de contracte. Un mes d'alta parcial
@@ -1194,11 +1207,19 @@ function openDay(d){
     + (E.exempt ? fila("exempt art. 7.p", eur(E.exempt) + " €", "dim") : "")
     + fila("− SS i IRPF", eur(E.ss + E.irpf) + " €", "neg")
     + fila("Net del dia", eur(E.net) + " €", "pos")
+    + (E.exSalari ? `<div style="height:6px"></div>`
+        + fila("Salari fix que aquest dia deixa exempt", eur(E.exSalari) + " €", "dim")
+        + fila("Estalvi d'IRPF que suposa", eur(E.estalviIRPF) + " €", "pos")
+        + fila("Efecte total del dia", eur(E.efecte) + " €", "pos") : "")
     + `<div class="note" style="margin-top:6px">${
         x.descans ? "Les extres van a la bossa de descans, així que no es paguen."
-        : x.extra ? "Extres a " + eur(E.hExtra) + " €/h" + (x.dieta ? " · dieta " + eur(x.dieta) + " €" : "")
-        : x.dieta ? "Només dieta: " + eur(x.dieta) + " €"
-        : "Sense extres ni dieta: aquest dia no genera part variable."}</div>`;
+        : x.extra ? "Extres a " + eur(E.hExtra) + " €/h" : ""}${
+        x.dieta ? (x.extra && !x.descans ? " · " : "")
+                + "<b>dieta " + (x.via === "I" ? "internacional" : "nacional") + "</b> "
+                + eur(x.dieta) + " €" + (x.via === "I" ? ", exempta d'IRPF per l'art. 7.p" : ", tributa")
+                : ""}${
+        !x.extra && !x.dieta ? "Sense extres ni dieta: aquest dia no genera part variable." : ""}
+      ${x.via !== "-" ? `<br>El règim de dieta el marca l'<b>estat del dia</b> (${STATES[registreForm().s].l}), no el codi de destinació.` : ""}</div>`;
   };
   ["iH","iM","fH","fM","pIn"].forEach(id =>
     ["input","change"].forEach(ev => $(id).addEventListener(ev, syncH)));
