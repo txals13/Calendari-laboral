@@ -363,6 +363,8 @@ function stats(y){
     days:{HQ:0,EST:0,NAC:0,POS:0,VAC:0,LD:0,DC:0}, worked:0,
     ponts:0, festius:0, capsSetmana:0, festiusTreballats:0,
     extra:0, extraYTD:0, curt:0,
+    /* dies fora: naturals (hi ets encara que sigui diumenge) i treballats */
+    diesLaborables:0, diesLabYTD:0, foraTreb:0, foraTrebEST:0, foraTrebNAC:0,
     dest:{}, cfg:o.cfg
   };
   for(let m=0;m<12;m++){
@@ -376,6 +378,7 @@ function stats(y){
       M.theo += th; S.theoTot += th;
       if(dins && t === "B") S.ponts++;
       if(dins && t === "F") S.festius++;
+      if(th > 0){ S.diesLaborables++; if(past) S.diesLabYTD++; }   /* dies que toca treballar */
       if(past) S.theoYTD += th;
       if(!r) continue;
       const h = horesDia(r);   /* si hi ha fitxatge, mana el fitxatge */
@@ -408,6 +411,8 @@ function stats(y){
         M.days++; S.worked++;
         if(t === "X") S.capsSetmana++;
         if(t === "F") S.festiusTreballats++;
+        if(r.s === "EST"){ S.foraTreb++; S.foraTrebEST++; }
+        if(r.s === "NAC"){ S.foraTreb++; S.foraTrebNAC++; }
       }
     }
     M.target = M.theo - M.vac - M.ld;
@@ -866,7 +871,30 @@ function viewTrv(){
   const trows = trips.length ? trips.reverse().map(t =>
       `<tr><td>${esc(t.k)}</td><td style="text-align:left" class="dim">${dstr(t.from)} → ${dstr(t.to)}</td><td>${t.days}</td></tr>`).join("")
     : `<tr><td colspan="3" class="dim" style="text-align:left">—</td></tr>`;
+  /* Dies fora en dies NATURALS: si ets a Canadà, hi ets també el diumenge. Els
+     percentatges van sobre els dies que toca treballar segons el calendari. */
+  const foraNat = S.days.EST + S.days.NAC;
+  const pct = (a,b) => b > 0 ? fmt(a/b*100) + " %" : "—";
+  const kpi = (k,v,s) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:""}</div>`;
   return `
+  <div class="kpis" style="margin-bottom:10px">
+    ${kpi("Dies fora", foraNat, "dies naturals · " + S.days.EST + " estranger, " + S.days.NAC + " nacional")}
+    ${kpi("Treballats a fora", S.foraTreb, S.foraTrebEST + " estranger, " + S.foraTrebNAC + " nacional")}
+    ${kpi("Fora / laborables fins avui", pct(S.foraTreb, S.diesLabYTD), S.foraTreb + " de " + S.diesLabYTD + " dies laborables transcorreguts")}
+    ${kpi("Fora / treballats", pct(S.foraTreb, S.worked), S.foraTreb + " de " + S.worked + " dies amb hores")}
+  </div>
+  <div class="card">
+    <div class="card-t">Proporció de desplaçament — ${y}</div>
+    <table>
+      <thead><tr><th>Concepte</th><th>Dies</th><th>% fins avui</th><th>% de l'any</th></tr></thead>
+      <tr><td style="text-align:left">Dies laborables del calendari</td><td>${S.diesLabYTD} / ${S.diesLaborables}</td><td class="dim">100 %</td><td class="dim">100 %</td></tr>
+      <tr><td style="text-align:left">Dies treballats</td><td>${S.worked}</td><td class="dim">${pct(S.worked, S.diesLabYTD)}</td><td class="dim">${pct(S.worked, S.diesLaborables)}</td></tr>
+      <tr><td style="text-align:left">— a l'estranger</td><td>${S.foraTrebEST}</td><td class="${S.foraTrebEST?"pos":"dim"}">${pct(S.foraTrebEST, S.diesLabYTD)}</td><td class="dim">${pct(S.foraTrebEST, S.diesLaborables)}</td></tr>
+      <tr><td style="text-align:left">— nacionals</td><td>${S.foraTrebNAC}</td><td class="${S.foraTrebNAC?"pos":"dim"}">${pct(S.foraTrebNAC, S.diesLabYTD)}</td><td class="dim">${pct(S.foraTrebNAC, S.diesLaborables)}</td></tr>
+      <tfoot><tr><td style="text-align:left">Total treballat fora</td><td>${S.foraTreb}</td><td class="${S.foraTreb?"pos":"dim"}">${pct(S.foraTreb, S.diesLabYTD)}</td><td class="dim">${pct(S.foraTreb, S.diesLaborables)}</td></tr></tfoot>
+    </table>
+    <div class="note">Els <b>dies fora</b> de dalt són dies naturals —caps de setmana i festius inclosos, perquè hi ets igual— i serveixen per a dietes i desplaçaments. Aquesta taula, en canvi, compta <b>dies treballats</b>, que és el que fa servir l'exempció de l'art. 7.p. La columna «fins avui» és la que té sentit a mig any; la de l'any sencer només quadrarà quan el tinguis tot registrat.</div>
+  </div>
   <div class="card">
     <div class="card-t">Dies per destinació — ${y}</div>
     <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
