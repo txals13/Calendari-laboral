@@ -159,6 +159,31 @@ td.dim{color:var(--tx3)}
 .note{font-size:11px;color:var(--tx3);margin-top:6px;line-height:1.45}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .hide{display:none!important}
+/* ── Informe imprimible ──
+   Viu fora de l'app i només apareix en imprimir. Deliberadament en blanc i
+   negre sobre blanc: és un document per lliurar, no una pantalla. */
+#print{display:none}
+@media print{
+  html,body{height:auto;overflow:visible;background:#fff;color:#000}
+  #app,#tip,.scrim,.sheet{display:none!important}
+  #print{display:block;font-family:-apple-system,"Segoe UI",system-ui,sans-serif;color:#000;padding:0}
+  #print h1{font-size:17pt;margin:0 0 2mm}
+  #print .sub{display:flex;justify-content:space-between;font-size:10pt;margin-bottom:4mm;
+    padding-bottom:2mm;border-bottom:1.5pt solid #000}
+  #print table{width:100%;border-collapse:collapse;font-size:8pt}
+  #print th,#print td{border:0.4pt solid #999;padding:1.2mm 1.6mm;text-align:left;vertical-align:top}
+  #print th{background:#eee;font-weight:700;border-color:#666}
+  #print .r{text-align:right;white-space:nowrap}
+  #print thead{display:table-header-group}      /* la capçalera es repeteix a cada pàgina */
+  #print tr{break-inside:avoid}
+  #print tfoot td{border-top:1.2pt solid #000;background:#f4f4f4}
+  #print .peu{margin-top:5mm;font-size:8.5pt;line-height:1.45}
+  #print .signa{display:flex;gap:20mm;margin:12mm 0 4mm}
+  #print .signa div{flex:1;font-size:8.5pt}
+  #print .signa span{display:block;border-bottom:0.6pt solid #000;height:14mm}
+  #print .petit{font-size:7.5pt;color:#444}
+  @page{margin:14mm 10mm}
+}
 </style>
 </head>
 <body>
@@ -181,6 +206,7 @@ td.dim{color:var(--tx3)}
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" inert></div>
 <div id="tip"></div>
+<div id="print"></div>
 
 <script>
 "use strict";
@@ -1079,7 +1105,7 @@ function openDay(d){
   const dests = [...new Set(Object.values(yr(y).days).map(x => x.d).filter(Boolean))].sort();
   const btns = Object.entries(STATES).map(([k,v]) =>
     `<button class="stb${r.s===k?" on":""}" data-s="${k}" style="${r.s===k?`border-color:var(${v.c});color:var(${v.c})`:""}">${v.l}<small>${v.s}</small></button>`).join("");
-  openSheet(`
+  openSheet(`<div id="diaForm">
     <div class="sh-hdr"><div class="sh-t">${WDAYS[wday(y,m,d)]} ${d} ${deMes(m)} de ${y}</div>
       <button class="btn sm" id="shX">✕</button></div>
     <div class="sh-sub">${TYPES[t].l}${th?" · "+fmt(th)+" h teòriques":" · sense jornada"}</div>
@@ -1129,7 +1155,7 @@ function openDay(d){
     <div class="acts">
       <button class="btn dgr" id="shDel">Esborra</button>
       <button class="btn pri" id="shOk">Desa</button>
-    </div>`);
+    </div></div>`);
 
   const hIn = $("hIn");
   /* autoH = les hores del quadre les hem posat nosaltres, no l'usuari. En un rang,
@@ -1228,10 +1254,11 @@ function openDay(d){
   };
   ["iH","iM","fH","fM","pIn"].forEach(id =>
     ["input","change"].forEach(ev => $(id).addEventListener(ev, syncH)));
-  /* qualsevol camp que canviï els diners repinta el resum; els botons d'estat i
-     de compensació el criden ells mateixos, just després de moure la classe */
-  $("sheet").addEventListener("change", pintaCalc);
-  $("sheet").addEventListener("input", pintaCalc);
+  /* Els escoltadors van al contenidor de la fitxa, no al panell: el panell es
+     reaprofita per als altres fulls i, penjats allà, s'hi acumulaven a cada
+     obertura i petaven quan els camps del dia ja no hi eren. */
+  $("diaForm").addEventListener("change", pintaCalc);
+  $("diaForm").addEventListener("input", pintaCalc);
   obreCalendari($("untilIn"));
   syncH();
   pintaCalc();
@@ -1337,6 +1364,18 @@ function openCfg(){
       : signedIn  ? "Connectat. Els canvis pugen sols un parell de segons després de fer-los, i en obrir l'app es baixa el que hagis fet en un altre dispositiu."
       : "Sense connectar, les dades només viuen en aquest navegador."
       }${syncErr ? " <b style=\"color:var(--red)\">"+esc(syncErr)+"</b>" : ""}</div>
+    <div class="lbl">Informe de jornada per a l'empresa</div>
+    <div class="row2">
+      <div><input class="fld" id="cNom" maxlength="60" value="${esc(c.nom||"")}" placeholder="El teu nom"><div class="note">nom</div></div>
+      <div><input class="fld" id="cEmp" maxlength="60" value="${esc(c.empresa||"")}" placeholder="Empresa"><div class="note">empresa</div></div>
+    </div>
+    <div class="chips" style="margin-top:8px">
+      <button class="btn sm" id="infPdfMes">Informe del mes (PDF)</button>
+      <button class="btn sm" id="infPdfAny">Informe de l'any (PDF)</button>
+      <button class="btn sm" id="infXlsMes">Excel del mes</button>
+      <button class="btn sm" id="infXlsAny">Excel de l'any</button>
+    </div>
+    <div class="note">Un dia per fila amb el fitxatge, l'estat, les hores fetes, les previstes i les extres, més els totals i espai per a signatures. El PDF surt del diàleg d'impressió: tria «Desa com a PDF».</div>
     <div class="lbl">Dades</div>
     <div class="chips">
       <button class="btn sm" id="exJson">Exporta còpia (JSON)</button>
@@ -1352,9 +1391,17 @@ function openCfg(){
     o.vacH = +$("cVac").value || 0; o.carry = +$("cCar").value || 0;
     o.ldH  = +$("cLd").value  || 0;
     const t = $("cTgt").value.trim(); o.target = t === "" ? null : +t;
+    o.nom = $("cNom").value.trim(); o.empresa = $("cEmp").value.trim();
     yr(y).cfgT = Date.now();
     save(); closeSheet(); render();
   };
+  /* el nom i l'empresa surten a la capçalera de l'informe: els desem abans */
+  const desaCap = () => { const o = yr(y).cfg;
+    o.nom = $("cNom").value.trim(); o.empresa = $("cEmp").value.trim(); yr(y).cfgT = Date.now(); save(); };
+  $("infPdfMes").onclick = () => { desaCap(); closeSheet(); imprimeixInforme(y, MONTH, MONTH); };
+  $("infPdfAny").onclick = () => { desaCap(); closeSheet(); imprimeixInforme(y, 0, 11); };
+  $("infXlsMes").onclick = () => { desaCap(); exportaXlsx(y, MONTH, MONTH); };
+  $("infXlsAny").onclick = () => { desaCap(); exportaXlsx(y, 0, 11); };
   if($("signIn"))  $("signIn").onclick  = async () => { closeSheet(); await sync(true); openCfg(); };
   if($("syncNow")) $("syncNow").onclick = async () => { closeSheet(); await sync(true); openCfg(); };
   if($("signOut")) $("signOut").onclick = () => {
@@ -1465,11 +1512,153 @@ function openPay(){
     save(); closeSheet(); render();
   };
 }
-function dl(name, text, mime){
+/* ───────────────── Full de càlcul .xlsx ─────────────────
+   Un .xlsx és un ZIP amb uns quants XML. El muntem sense comprimir (mètode
+   "store"), que el format admet, i així no cal cap llibreria: l'app continua
+   sent un sol fitxer i seguint funcionant sense connexió. */
+const TCRC = (() => {
+  const t = new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n]=c>>>0; }
+  return t;
+})();
+function crc32(u8){ let c = 0xFFFFFFFF; for(let i=0;i<u8.length;i++) c = TCRC[(c ^ u8[i]) & 0xFF] ^ (c>>>8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files){
+  const enc = new TextEncoder();
+  const u16 = n => [n & 255, (n>>8) & 255];
+  const u32 = n => [n & 255, (n>>8) & 255, (n>>16) & 255, (n>>24) & 255];
+  const parts = [], central = [];
+  let off = 0;
+  files.forEach(f => {
+    const nom = enc.encode(f.name), dades = f.data, crc = crc32(dades), n = dades.length;
+    const local = new Uint8Array([...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(crc), ...u32(n), ...u32(n), ...u16(nom.length), ...u16(0)]);
+    parts.push(local, nom, dades);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(crc), ...u32(n), ...u32(n), ...u16(nom.length),
+      ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), nom);
+    off += local.length + nom.length + n;
+  });
+  const inici = off;
+  let mida = 0; central.forEach(c => mida += c.length);
+  const fi = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0),
+    ...u16(files.length), ...u16(files.length), ...u32(mida), ...u32(inici), ...u16(0)]);
+  return new Blob([...parts, ...central, fi], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+const xmlEsc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+const colXL = i => { let s = "", n = i + 1; while(n){ const r = (n-1) % 26; s = String.fromCharCode(65+r) + s; n = (n-1-r)/26; } return s; };
+
+/** files: [[cel·la,…],…]. Un text va com a text; un número, com a número. La
+    primera fila surt en negreta i es congela per poder-hi navegar. */
+function xlsx(files, amples, nomFull){
+  const enc = new TextEncoder();
+  const rows = files.map((fila, r) => {
+    const cel = fila.map((v, c) => {
+      const ref = colXL(c) + (r+1);
+      const est = r === 0 ? ' s="1"' : "";
+      if(v == null || v === "") return `<c r="${ref}"${est}/>`;
+      if(typeof v === "number" && isFinite(v)) return `<c r="${ref}"${est}><v>${v}</v></c>`;
+      return `<c r="${ref}"${est} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+    }).join("");
+    return `<row r="${r+1}">${cel}</row>`;
+  }).join("");
+  const cols = amples ? `<cols>${amples.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
+  const F = [
+    ["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
+    ["_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ["xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEsc(nomFull||"Full1")}" sheetId="1" r:id="rId1"/></sheets></workbook>`],
+    ["xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ["xl/styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+    ["xl/worksheets/sheet1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${rows}</sheetData></worksheet>`]
+  ];
+  return zipStore(F.map(([name, xml]) => ({name, data: enc.encode(xml)})));
+}
+
+function dl(name, text, mime){ dlBlob(name, new Blob([text], {type:mime})); }
+function dlBlob(name, blob){
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], {type:mime}));
+  a.href = URL.createObjectURL(blob);
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ───────────────── Informe d'hores ─────────────────
+   Full de registre de jornada per presentar a l'empresa: un dia per fila, amb
+   el fitxatge, l'estat i les hores extres, i els totals. */
+const COLS_INFORME = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
+                      "Pausa (h)","Hores fetes","Previstes","Extres","Nota"];
+const MESOS_TOT = -1;
+function periodeText(y, mDe, mA){
+  return mDe === mA ? `${MONTHS[mDe]} de ${y}`
+       : mDe === 0 && mA === 11 ? `Any ${y}`
+       : `${MONTHS[mDe]} – ${MONTHS[mA]} de ${y}`;
+}
+/** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF". */
+function imprimeixInforme(y, mDe, mA){
+  const {files, totals} = filesInforme(y, mDe, mA);
+  const c = yr(y).cfg;
+  const num = new Set([7,8,9,10]);   /* columnes numèriques, alineades a la dreta */
+  const cap = COLS_INFORME.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
+  const cos = files.map(f => "<tr>" + f.map((v,i) =>
+      `<td${num.has(i)?' class="r"':""}>${typeof v === "number" ? (v ? fmt(v) : "") : esc(v)}</td>`).join("") + "</tr>").join("");
+  const doc = document.getElementById("print");
+  doc.innerHTML = `
+    <h1>Registre de jornada</h1>
+    <div class="sub">
+      <div><b>${esc(c.nom || "")}</b>${c.empresa ? " · " + esc(c.empresa) : ""}</div>
+      <div>${esc(periodeText(y, mDe, mA))}</div>
+    </div>
+    <table>
+      <thead><tr>${cap}</tr></thead>
+      <tbody>${cos}</tbody>
+      <tfoot><tr>
+        <td colspan="7"><b>Totals</b> — ${totals.dies} dies amb hores registrades</td>
+        <td class="r"></td>
+        <td class="r"><b>${fmt(totals.hores)}</b></td>
+        <td class="r">${fmt(totals.previstes)}</td>
+        <td class="r"><b>${fmt(totals.extres)}</b></td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+    <div class="peu">
+      <p>Les <b>hores extres</b> es compten dia a dia: són les hores fetes per damunt de
+         les previstes de cada jornada, i no es compensen amb els dies que se'n fan menys.
+         Les hores previstes surten del calendari laboral signat.</p>
+      <div class="signa">
+        <div><span></span>Treballador/a</div>
+        <div><span></span>Empresa</div>
+      </div>
+      <p class="petit">Document generat el ${new Date().toLocaleDateString("ca-ES")} a partir del registre propi de jornada.</p>
+    </div>`;
+  document.body.classList.add("printing");
+  const neteja = () => { document.body.classList.remove("printing"); window.removeEventListener("afterprint", neteja); };
+  window.addEventListener("afterprint", neteja);
+  setTimeout(() => window.print(), 60);
+}
+function exportaXlsx(y, mDe, mA){
+  const {files, totals} = filesInforme(y, mDe, mA);
+  const dades = [COLS_INFORME, ...files, [],
+    ["Totals", "", "", "", "", "", "", "", totals.hores, totals.previstes, totals.extres,
+     totals.dies + " dies amb hores"]];
+  const amples = [11,6,17,12,11,9,9,9,11,10,9,30];
+  const nom = "registre-jornada-" + y + (mDe === mA ? "-" + pad(mDe+1) : "") + ".xlsx";
+  dlBlob(nom, xlsx(dades, amples, periodeText(y, mDe, mA).slice(0,31)));
+}
+function filesInforme(y, mDe, mA){
+  const P = yr(y).pay, files = [];
+  let tH = 0, tP = 0, tE = 0, tDies = 0;
+  for(let m = mDe; m <= mA; m++) for(let d = 1; d <= mlen(y,m); d++){
+    const r = rec(y,m,d); if(!r) continue;
+    const x = calcDia(y,m,d,r,P); if(!x) continue;
+    const t = dtype(y,m,d);
+    files.push([
+      iso(y,m,d), WDAYS[wday(y,m,d)], TYPES[t].l,
+      r.s ? STATES[r.s].l : "", r.d || "",
+      r.i || "", r.f || "", +r.p || 0,
+      x.h, x.prev, x.extra, r.n || ""
+    ]);
+    tH += x.h; tP += x.prev; tE += x.extra; if(x.h > 0) tDies++;
+  }
+  return {files, totals:{hores:r2(tH), previstes:r2(tP), extres:r2(tE), dies:tDies}};
 }
 
 /* ───────────────────────── Google Drive ─────────────────────────
