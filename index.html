@@ -401,8 +401,8 @@ function stats(y){
         if(x){
           if(r.s === "EST" || r.s === "NAC"){
             S.hForaOrd += x.ordin;      S.hForaExt += ex;
-            S.hDespOrd += x.despOrd;    S.hDespExt += r2(x.desp - x.despOrd);
-            S.hTrebOrd += x.trebOrd;    S.hTrebExt += r2(ex - (x.desp - x.despOrd));
+            S.hDespOrd += x.despOrd;    S.hDespExt += x.despExt;
+            S.hTrebOrd += x.trebOrd;    S.hTrebExt += x.trebExt;
           } else S.hPlantaOrd += x.ordin;
         }
       }
@@ -480,15 +480,19 @@ function calcDia(y,m,d,r,P){
                              + (fest ? P.capSetmana : P.pernocta) + (+r.km||0) * P.kmEur;
   /* Desplaçament: porta de casa a porta d'hotel, hotel-fàbrica i tornada. És un
      SUBCONJUNT de les hores del dia, mai una cosa a part, i la resta és treball
-     efectiu al client. El repartiment entre jornada ordinària i extraordinària
-     es fa a prorrata: el viatge no cau ni tot al principi ni tot al final. */
+     efectiu al client.
+     El viatge que CAP dins la jornada no és extraordinari pel fet de ser viatge;
+     el que la supera, sí. Per això s'imputa primer a les hores extres i la resta
+     a les ordinàries: així un dia de 9 h de jornada amb el client fins les 17 h i
+     el viatge de tornada de 17 a 21 dóna 9 ordinàries i 4 d'extres de viatge,
+     que és com ho paga l'empresa. */
   const desp = noEsTreballa ? 0 : Math.min(+r.v || 0, h);
   const ordin = Math.min(h, prev);
+  const despExt = Math.min(desp, extra), despOrd = r2(desp - despExt);
   return {
     d, h, prev, fest, extra, via, descans, dieta: r2(dieta),
-    desp, treball: r2(h - desp), ordin,
-    despOrd: h > 0 ? r2(desp * ordin / h) : 0,
-    trebOrd: h > 0 ? r2(ordin - desp * ordin / h) : 0,
+    desp, treball: r2(h - desp), ordin, despExt, despOrd,
+    trebOrd: r2(ordin - despOrd), trebExt: r2(extra - despExt),
     extraPagada: descans ? 0 : extra,
     generat: descans ? r2(extra * (fest ? P.factCdS : P.factLab)) : 0,
     gaudit: r.s === "DC" ? prev : 0,
@@ -951,19 +955,27 @@ function blocUtilitzacio(y, S){
       ${fila("desplaçament", S.hDespOrd, p(S.hDespOrd), "", 1)}
       ${fila("A planta", S.hPlantaOrd, p(S.hPlantaOrd))}
       <tfoot>
-        <tr><td style="text-align:left">Fora de planta — extraordinàries</td>
-            <td>${fmt(S.hForaExt)}</td><td class="dim">a part</td></tr>
+        <tr><td style="text-align:left"><b>Servei exterior extraordinari</b></td>
+            <td><b>${fmt(S.hForaExt)}</b></td><td class="${S.hForaExt?"neg":"dim"}">+${p(S.hForaExt)}</td></tr>
+        ${fila("treball al client", S.hTrebExt, "+"+p(S.hTrebExt), "", 1)}
+        ${fila("desplaçament", S.hDespExt, "+"+p(S.hDespExt), "", 1)}
         <tr><td style="text-align:left">Total dedicat a servei exterior</td>
-            <td>${fmt(foraTot)}</td><td class="${foraTot?"pos":"dim"}">${p(foraTot)}</td></tr>
+            <td>${fmt(foraTot)}</td><td class="dim">${p(foraTot)}</td></tr>
       </tfoot>
     </table>
-    <div class="chips" style="margin-top:10px">
-      <span class="chip">field utilization <b>${p(S.hForaOrd)}</b></span>
+    <div class="kpis" style="margin-top:10px">
+      <div class="kpi"><div class="k">A · Utilització normal</div><div class="v">${p(S.hForaOrd)}</div>
+        <div class="s">de la jornada ordinària, fora de planta</div></div>
+      <div class="kpi"><div class="k">B · Sobrecàrrega</div><div class="v ${S.hForaExt?"neg":""}">${p(S.hForaExt)}</div>
+        <div class="s">hores addicionals que el servei exterior no cabia dins la jornada</div></div>
+    </div>
+    <div class="chips" style="margin-top:8px">
       <span class="chip">productiu <b>${p(S.hTrebOrd)}</b></span>
       <span class="chip">travel ratio <b>${foraTot > 0 ? fmt(despTot/foraTot*100)+" %" : "—"}</b></span>
       <span class="chip">desplaçament fora de jornada <b>${fmt(S.hDespExt)}</b> h</span>
     </div>
-    <div class="note"><b>Desplaçament</b> és de porta de casa a porta d'hotel, hotel-fàbrica i tornada; la resta de les hores del dia són treball efectiu al client. Les <b>extraordinàries queden sota la ratlla</b>: si les sumessis al percentatge, barrejaries capacitat ordinària amb hores extres i el número deixaria de voler dir res. El repartiment del desplaçament entre ordinàries i extres es fa a prorrata de les hores del dia.
+    <div class="note"><b>Desplaçament</b> és de porta de casa a porta d'hotel, hotel-fàbrica i tornada; la resta de les hores del dia són treball efectiu al client. Les <b>extraordinàries queden sota la ratlla</b>: si les sumessis al percentatge, barrejaries capacitat ordinària amb hores extres i el número deixaria de voler dir res. El viatge que cap dins la jornada <b>no</b> és extraordinari pel fet de ser viatge; el que la supera, sí. Per això el desplaçament s'imputa primer a les hores extres. Els caps de setmana i festius no tenen jornada, així que tot el que hi facis hi surt com a extraordinari.
+      <br><b>A</b> és quina part de la jornada ordinària passes fora de planta. <b>B</b> són les hores addicionals que has necessitat perquè el servei exterior no cabia dins la jornada: si creix, és senyal que el departament necessita més mans.
       <br>La <b>capacitat</b> és l'objectiu de l'any: hores del calendari menys les dels dies que marquis com a vacances. Ara són ${fmt(cap)} h; amb la bossa sencera de vacances marcada baixarà a les 1.746 h del conveni, que és el denominador correcte —el temps de vacances no és capacitat disponible.</div>
   </div>`;
 }
