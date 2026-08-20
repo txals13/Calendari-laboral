@@ -1,0 +1,8 @@
+# Exportacions de dades personals: hores, viatges, salari i nòmina.
+# El repositori és públic, així que no hi han d'entrar mai.
+calendari-laboral-*.json
+calendari-*.csv
+
+# Qualsevol còpia de seguretat que deixis a la carpeta
+*.backup.json
+*-backup.json
