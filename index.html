@@ -365,6 +365,9 @@ function stats(y){
     extra:0, extraYTD:0, curt:0,
     /* dies fora: naturals (hi ets encara que sigui diumenge) i treballats */
     diesLaborables:0, diesLabYTD:0, foraTreb:0, foraTrebEST:0, foraTrebNAC:0,
+    /* utilització: hores fora de planta, partides en treball/desplaçament i en
+       jornada ordinària/extraordinària */
+    hForaOrd:0, hForaExt:0, hDespOrd:0, hDespExt:0, hTrebOrd:0, hTrebExt:0, hPlantaOrd:0,
     dest:{}, cfg:o.cfg
   };
   for(let m=0;m<12;m++){
@@ -393,6 +396,15 @@ function stats(y){
         const cu = Math.max(0, r2(prev - h));
         M.extra += ex; S.extra += ex; if(past) S.extraYTD += ex;
         M.curt += cu; S.curt += cu;
+        /* utilització: fora de planta si el dia és de viatge, si no a planta */
+        const x = calcDia(y,m,d,r,o.pay);
+        if(x){
+          if(r.s === "EST" || r.s === "NAC"){
+            S.hForaOrd += x.ordin;      S.hForaExt += ex;
+            S.hDespOrd += x.despOrd;    S.hDespExt += r2(x.desp - x.despOrd);
+            S.hTrebOrd += x.trebOrd;    S.hTrebExt += r2(ex - (x.desp - x.despOrd));
+          } else S.hPlantaOrd += x.ordin;
+        }
       }
       if(r.s){
         S.days[r.s] = (S.days[r.s]||0) + 1;
@@ -466,8 +478,17 @@ function calcDia(y,m,d,r,P){
   else if(via === "I") dieta = fest ? P.intlFest : P.intlLab;
   else if(via === "N") dieta = P.esmorzar + P.dinar + P.sopar
                              + (fest ? P.capSetmana : P.pernocta) + (+r.km||0) * P.kmEur;
+  /* Desplaçament: porta de casa a porta d'hotel, hotel-fàbrica i tornada. És un
+     SUBCONJUNT de les hores del dia, mai una cosa a part, i la resta és treball
+     efectiu al client. El repartiment entre jornada ordinària i extraordinària
+     es fa a prorrata: el viatge no cau ni tot al principi ni tot al final. */
+  const desp = noEsTreballa ? 0 : Math.min(+r.v || 0, h);
+  const ordin = Math.min(h, prev);
   return {
     d, h, prev, fest, extra, via, descans, dieta: r2(dieta),
+    desp, treball: r2(h - desp), ordin,
+    despOrd: h > 0 ? r2(desp * ordin / h) : 0,
+    trebOrd: h > 0 ? r2(ordin - desp * ordin / h) : 0,
     extraPagada: descans ? 0 : extra,
     generat: descans ? r2(extra * (fest ? P.factCdS : P.factLab)) : 0,
     gaudit: r.s === "DC" ? prev : 0,
@@ -895,6 +916,7 @@ function viewTrv(){
     </table>
     <div class="note">Els <b>dies fora</b> de dalt són dies naturals —caps de setmana i festius inclosos, perquè hi ets igual— i serveixen per a dietes i desplaçaments. Aquesta taula, en canvi, compta <b>dies treballats</b>, que és el que fa servir l'exempció de l'art. 7.p. La columna «fins avui» és la que té sentit a mig any; la de l'any sencer només quadrarà quan el tinguis tot registrat.</div>
   </div>
+  ${blocUtilitzacio(y, S)}
   <div class="card">
     <div class="card-t">Dies per destinació — ${y}</div>
     <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
@@ -904,6 +926,45 @@ function viewTrv(){
     <div class="card-t">Estades</div>
     <table><thead><tr><th>Destinació</th><th style="text-align:left">Període</th><th>Dies</th></tr></thead><tbody>${trows}</tbody></table>
     <div class="note">Els dies solts amb la mateixa destinació separats per menys de 4 dies es compten com una sola estada.</div>
+  </div>`;
+}
+
+/** Utilització del tècnic. El denominador és la capacitat ORDINÀRIA del conveni
+    —hores del calendari menys vacances—, i les hores extraordinàries queden
+    sota la ratlla: barrejar-les inflaria el percentatge i amagaria les extres. */
+function blocUtilitzacio(y, S){
+  const cap = S.target;                       /* capacitat ordinària disponible */
+  const p = h => cap > 0 ? fmt(h/cap*100) + " %" : "—";
+  const foraTot = r2(S.hForaOrd + S.hForaExt);
+  const despTot = r2(S.hDespOrd + S.hDespExt);
+  if(foraTot === 0 && S.hPlantaOrd === 0) return "";
+  const fila = (l,h,pc,cls,ind) => `<tr><td style="text-align:left${ind?";padding-left:14px":""}"${ind?' class="dim"':""}>${l}</td>
+    <td>${fmt(h)}</td><td class="${cls||"dim"}">${pc}</td></tr>`;
+  return `
+  <div class="card">
+    <div class="card-t">Utilització — ${y}</div>
+    <table>
+      <thead><tr><th>Concepte</th><th>Hores</th><th>% capacitat</th></tr></thead>
+      ${fila("Capacitat ordinària disponible", cap, "100 %")}
+      ${fila("Fora de planta", S.hForaOrd, p(S.hForaOrd), S.hForaOrd?"pos":"dim")}
+      ${fila("treball al client", S.hTrebOrd, p(S.hTrebOrd), "", 1)}
+      ${fila("desplaçament", S.hDespOrd, p(S.hDespOrd), "", 1)}
+      ${fila("A planta", S.hPlantaOrd, p(S.hPlantaOrd))}
+      <tfoot>
+        <tr><td style="text-align:left">Fora de planta — extraordinàries</td>
+            <td>${fmt(S.hForaExt)}</td><td class="dim">a part</td></tr>
+        <tr><td style="text-align:left">Total dedicat a servei exterior</td>
+            <td>${fmt(foraTot)}</td><td class="${foraTot?"pos":"dim"}">${p(foraTot)}</td></tr>
+      </tfoot>
+    </table>
+    <div class="chips" style="margin-top:10px">
+      <span class="chip">field utilization <b>${p(S.hForaOrd)}</b></span>
+      <span class="chip">productiu <b>${p(S.hTrebOrd)}</b></span>
+      <span class="chip">travel ratio <b>${foraTot > 0 ? fmt(despTot/foraTot*100)+" %" : "—"}</b></span>
+      <span class="chip">desplaçament fora de jornada <b>${fmt(S.hDespExt)}</b> h</span>
+    </div>
+    <div class="note"><b>Desplaçament</b> és de porta de casa a porta d'hotel, hotel-fàbrica i tornada; la resta de les hores del dia són treball efectiu al client. Les <b>extraordinàries queden sota la ratlla</b>: si les sumessis al percentatge, barrejaries capacitat ordinària amb hores extres i el número deixaria de voler dir res. El repartiment del desplaçament entre ordinàries i extres es fa a prorrata de les hores del dia.
+      <br>La <b>capacitat</b> és l'objectiu de l'any: hores del calendari menys les dels dies que marquis com a vacances. Ara són ${fmt(cap)} h; amb la bossa sencera de vacances marcada baixarà a les 1.746 h del conveni, que és el denominador correcte —el temps de vacances no és capacitat disponible.</div>
   </div>`;
 }
 
@@ -1148,8 +1209,12 @@ function openDay(d){
         <div class="hm"><select class="fld" id="fH">${optsUnitat(HF.h,23)}</select>
           <span>:</span><select class="fld" id="fM">${optsUnitat(HF.m,59)}</select></div></div>
     </div>
-    <div style="margin-top:8px"><div class="note" style="margin-bottom:3px">pausa (h)</div>
-      <select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select></div>
+    <div class="row2" style="margin-top:8px">
+      <div><div class="note" style="margin-bottom:3px">pausa (h)</div>
+        <select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select></div>
+      <div><div class="note" style="margin-bottom:3px">de les quals, desplaçament (h)</div>
+        <select class="fld" id="vIn">${optsNum(r.v!=null?r.v:"", 16, 0.25, "0", 0.25)}</select></div>
+    </div>
     <div class="lbl">Hores fetes</div>
     <div class="hrow">
       <button id="hMinus">−</button>
@@ -1236,7 +1301,7 @@ function openDay(d){
     const F = llegeixFitxatge();
     return {
       s: ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "",
-      h: +hIn.value || 0, i: F.i, f: F.f, p: F.p,
+      h: +hIn.value || 0, i: F.i, f: F.f, p: F.p, v: +$("vIn").value || 0,
       prev: $("prevIn").value === "" ? null : +$("prevIn").value,
       km: +$("kmIn").value || 0,
       d: $("dIn").value.trim().toUpperCase(),
@@ -1339,6 +1404,7 @@ function applyRange(val){
         case "c": posa("c", E.c === "D" ? "D" : ""); break;
         case "prev": posa("prev", E.prev == null ? "" : E.prev); break;
         case "p": posa("p", E.p); break;
+        case "v": posa("v", E.v); break;
         case "i": case "f":
           /* el fitxatge concret només es repeteix als dies amb jornada */
           if(ancora || TYPES[t].h > 0) posa(k, E[k]); break;
