@@ -449,15 +449,34 @@ const r2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 const r4 = n => Math.round((n + Number.EPSILON) * 10000) / 10000;  /* els tipus van a 4 decimals */
 const hm2h = s => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s||"").trim()); return m ? (+m[1]) + (+m[2])/60 : null; };
 
-/** Hores fetes d'un dia: de l'inici/fi/pausa si n'hi ha, si no del camp d'hores. */
+/* El dia es fitxa en quatre hores:
+     vi  surto de casa o de l'hotel  ─┐
+     i   arribo al lloc de treball   ─┘ desplaçament d'anada
+     f   surto del lloc              ─┐
+     vf  arribo a l'hotel o a casa   ─┘ desplaçament de tornada
+   i el temps entre `i` i `f` és treball efectiu al client, menys la pausa.
+   Un dia a planta només omple `i` i `f`; un dia de només viatge, `vi` i `i`. */
+const durada = (x,y) => { const a = hm2h(x), b = hm2h(y); if(a == null || b == null) return null;
+                          let d = b - a; if(d < 0) d += 24; return d; };   /* pot travessar la mitjanit */
+function tramsDia(r){
+  if(!r) return null;
+  const anada = durada(r.vi, r.i), lloc = durada(r.i, r.f), tornada = durada(r.f, r.vf);
+  if(anada == null && lloc == null && tornada == null) return null;
+  const desp = r2((anada || 0) + (tornada || 0));
+  const treball = Math.max(0, r2((lloc || 0) - (+r.p || 0)));
+  return {desp, treball, total: r2(desp + treball)};
+}
+/** Hores fetes d'un dia: dels trams si n'hi ha, si no del camp d'hores. */
 function horesDia(r){
   if(!r) return 0;
-  const a = hm2h(r.i), b = hm2h(r.f);
-  if(a != null && b != null){
-    let d = b - a; if(d < 0) d += 24;          /* torn que travessa la mitjanit */
-    return Math.max(0, r2(d - (+r.p || 0)));
-  }
-  return +r.h || 0;
+  const t = tramsDia(r);
+  return t ? t.total : (+r.h || 0);
+}
+/** Hores de desplaçament: dels trams si n'hi ha, si no del camp manual. */
+function despDia(r){
+  if(!r) return 0;
+  const t = tramsDia(r);
+  return t ? t.desp : Math.min(+r.v || 0, horesDia(r));
 }
 /** Hores previstes: el que hagi escrit l'usuari; si no, la jornada del calendari. */
 const previstes = (y,m,d,r) => (r && r.prev != null && r.prev !== "") ? (+r.prev || 0) : theo(y,m,d);
@@ -486,9 +505,28 @@ function calcDia(y,m,d,r,P){
      a les ordinàries: així un dia de 9 h de jornada amb el client fins les 17 h i
      el viatge de tornada de 17 a 21 dóna 9 ordinàries i 4 d'extres de viatge,
      que és com ho paga l'empresa. */
-  const desp = noEsTreballa ? 0 : Math.min(+r.v || 0, h);
+  const desp = noEsTreballa ? 0 : Math.min(despDia(r), h);
   const ordin = Math.min(h, prev);
-  const despExt = Math.min(desp, extra), despOrd = r2(desp - despExt);
+  /* Amb els trams sabem QUAN es viatja, i el dia es recorre en ordre omplint
+     primer la jornada ordinària: el trajecte del matí hi cau dins, el del vespre
+     ja no. Sense trams no hi ha cronologia, i llavors el desplaçament s'imputa
+     primer a les extres, que és el criteri de l'empresa. */
+  const T = noEsTreballa ? null : tramsDia(r);
+  let despOrd, despExt;
+  if(T){
+    const anada = durada(r.vi, r.i) || 0;
+    const tornada = durada(r.f, r.vf) || 0;
+    let queda = prev;
+    const posa = seg => { const o = Math.min(seg, queda); queda = r2(queda - o); return o; };
+    const oAnada = posa(anada);
+    posa(T.treball);                    /* el temps al client consumeix jornada */
+    const oTornada = posa(tornada);
+    despOrd = r2(oAnada + oTornada);
+    despExt = r2(desp - despOrd);
+  } else {
+    despExt = Math.min(desp, extra);
+    despOrd = r2(desp - despExt);
+  }
   return {
     d, h, prev, fest, extra, via, descans, dieta: r2(dieta),
     desp, treball: r2(h - desp), ordin, despExt, despOrd,
@@ -1202,7 +1240,7 @@ function openDay(d){
   SEL = {y,m,d};
   const t = dtype(y,m,d), r = rec(y,m,d) || {};
   const th = TYPES[t].h;
-  const HI = parteixHora(r.i), HF = parteixHora(r.f);
+  const HVI = parteixHora(r.vi), HI = parteixHora(r.i), HF = parteixHora(r.f), HVF = parteixHora(r.vf);
   const dests = [...new Set(Object.values(yr(y).days).map(x => x.d).filter(Boolean))].sort();
   const btns = Object.entries(STATES).map(([k,v]) =>
     `<button class="stb${r.s===k?" on":""}" data-s="${k}" style="${r.s===k?`border-color:var(${v.c});color:var(${v.c})`:""}">${v.l}<small>${v.s}</small></button>`).join("");
@@ -1214,19 +1252,24 @@ function openDay(d){
     <div class="stbtns" id="stb">${btns}</div>
     <div class="lbl">Fitxatge</div>
     <div class="row2">
-      <div><div class="note" style="margin-bottom:3px">inici</div>
+      <div><div class="note" style="margin-bottom:3px">surto</div>
+        <div class="hm"><select class="fld" id="viH">${optsUnitat(HVI.h,23)}</select>
+          <span>:</span><select class="fld" id="viM">${optsUnitat(HVI.m,59)}</select></div></div>
+      <div><div class="note" style="margin-bottom:3px">arribo al lloc</div>
         <div class="hm"><select class="fld" id="iH">${optsUnitat(HI.h,23)}</select>
           <span>:</span><select class="fld" id="iM">${optsUnitat(HI.m,59)}</select></div></div>
-      <div><div class="note" style="margin-bottom:3px">fi</div>
-        <div class="hm"><select class="fld" id="fH">${optsUnitat(HF.h,23)}</select>
-          <span>:</span><select class="fld" id="fM">${optsUnitat(HF.m,59)}</select></div></div>
     </div>
     <div class="row2" style="margin-top:8px">
-      <div><div class="note" style="margin-bottom:3px">pausa (h)</div>
-        <select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select></div>
-      <div><div class="note" style="margin-bottom:3px">de les quals, desplaçament (h)</div>
-        <select class="fld" id="vIn">${optsNum(r.v!=null?r.v:"", 16, 0.25, "0", 0.25)}</select></div>
+      <div><div class="note" style="margin-bottom:3px">surto del lloc</div>
+        <div class="hm"><select class="fld" id="fH">${optsUnitat(HF.h,23)}</select>
+          <span>:</span><select class="fld" id="fM">${optsUnitat(HF.m,59)}</select></div></div>
+      <div><div class="note" style="margin-bottom:3px">arribo</div>
+        <div class="hm"><select class="fld" id="vfH">${optsUnitat(HVF.h,23)}</select>
+          <span>:</span><select class="fld" id="vfM">${optsUnitat(HVF.m,59)}</select></div></div>
     </div>
+    <div style="margin-top:8px"><div class="note" style="margin-bottom:3px">pausa (h)</div>
+      <select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select></div>
+    <div class="note" style="margin-top:4px">Un dia a planta només omple <b>arribo</b> i <b>surto del lloc</b>. Un dia de només viatge, <b>surto</b> i <b>arribo al lloc</b>.</div>
     <div class="lbl">Hores fetes</div>
     <div class="hrow">
       <button id="hMinus">−</button>
@@ -1291,17 +1334,19 @@ function openDay(d){
   });
   /* el fitxatge mana sobre el camp d'hores: si hi ha inici i fi, el total surt d'aquí */
   const llegeixFitxatge = () => ({
-    i: muntaHora($("iH").value, $("iM").value),
-    f: muntaHora($("fH").value, $("fM").value),
+    vi: muntaHora($("viH").value, $("viM").value),
+    i:  muntaHora($("iH").value,  $("iM").value),
+    f:  muntaHora($("fH").value,  $("fM").value),
+    vf: muntaHora($("vfH").value, $("vfM").value),
     p: +$("pIn").value || 0
   });
   const syncH = () => {
     const F = llegeixFitxatge();
-    const nota = $("hCalc");
-    if(F.i && F.f){
-      const v = horesDia(F);
-      assegurarOpcio(hIn, v); autoH = false;
-      nota.textContent = `Del fitxatge: ${fmt(v)} h`;
+    const t = tramsDia(F), nota = $("hCalc");
+    if(t){
+      assegurarOpcio(hIn, t.total); autoH = false;
+      nota.innerHTML = `Del fitxatge: <b>${fmt(t.total)} h</b>`
+        + (t.desp ? ` · desplaçament ${fmt(t.desp)} h · al client ${fmt(t.treball)} h` : "");
     } else nota.textContent = "";
   };
   /* El tipus d'IRPF recorre tot l'any: el calculem un cop en obrir la fitxa. */
@@ -1313,7 +1358,7 @@ function openDay(d){
     const F = llegeixFitxatge();
     return {
       s: ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "",
-      h: +hIn.value || 0, i: F.i, f: F.f, p: F.p, v: +$("vIn").value || 0,
+      h: +hIn.value || 0, vi: F.vi, i: F.i, f: F.f, vf: F.vf, p: F.p,
       prev: $("prevIn").value === "" ? null : +$("prevIn").value,
       km: +$("kmIn").value || 0,
       d: $("dIn").value.trim().toUpperCase(),
@@ -1357,7 +1402,7 @@ function openDay(d){
         !x.extra && !x.dieta ? "Sense extres ni dieta: aquest dia no genera part variable." : ""}
       ${x.via !== "-" ? `<br>El règim de dieta el marca l'<b>estat del dia</b> (${STATES[registreForm().s].l}), no el codi de destinació.` : ""}</div>`;
   };
-  ["iH","iM","fH","fM","pIn"].forEach(id =>
+  ["viH","viM","iH","iM","fH","fM","vfH","vfM","pIn"].forEach(id =>
     ["input","change"].forEach(ev => $(id).addEventListener(ev, syncH)));
   /* Els escoltadors van al contenidor de la fitxa, no al panell: el panell es
      reaprofita per als altres fulls i, penjats allà, s'hi acumulaven a cada
@@ -1416,7 +1461,9 @@ function applyRange(val){
         case "c": posa("c", E.c === "D" ? "D" : ""); break;
         case "prev": posa("prev", E.prev == null ? "" : E.prev); break;
         case "p": posa("p", E.p); break;
-        case "v": posa("v", E.v); break;
+        case "vi": case "vf":
+          /* els trams de viatge, com el fitxatge, només als dies amb jornada */
+          if(ancora || TYPES[t].h > 0) posa(k, E[k]); break;
         case "i": case "f":
           /* el fitxatge concret només es repeteix als dies amb jornada */
           if(ancora || TYPES[t].h > 0) posa(k, E[k]); break;
