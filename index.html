@@ -1125,7 +1125,7 @@ function openDay(d){
         <input class="fld" id="untilIn" type="date" min="${iso(y,m,d)}" max="${y}-12-31"></div>
     </div>
     <div><div class="lbl">Nota</div><input class="fld" id="nIn" maxlength="120" value="${esc(r.n||"")}" placeholder="opcional"></div>
-    <div class="note">«Aplica fins a» repeteix estat, hores i destinació a tots els dies del rang. Els desplaçaments (estranger, nacional, previst) marquen també caps de setmana i festius, a zero hores. La resta d'estats només toquen dies amb jornada.</div>
+    <div class="note">«Aplica fins a» propaga <b>només el que hagis canviat en aquesta fitxa</b>: si passes de Nacional a Estranger, la resta de dies mantenen les seves hores, destinació i notes. Els desplaçaments marquen també caps de setmana i festius, a zero hores; la resta d'estats només toquen dies amb jornada.</div>
     <div class="acts">
       <button class="btn dgr" id="shDel">Esborra</button>
       <button class="btn pri" id="shOk">Desa</button>
@@ -1176,16 +1176,21 @@ function openDay(d){
   /* El tipus d'IRPF recorre tot l'any: el calculem un cop en obrir la fitxa. */
   const tipusIRPF = irpfRate(y);
   const P = yr(y).pay;
-  /** Estat actual del formulari, com si fos un registre desat. */
-  const registreForm = () => {
+  /** Estat actual del formulari, amb tots els camps sempre presents: així es pot
+      comparar amb com estava en obrir-lo i saber què has tocat de veritat. */
+  const estatForm = () => {
     const F = llegeixFitxatge();
-    const v = {i:F.i, f:F.f, p:F.p, h:+hIn.value || 0, km:+$("kmIn").value || 0,
-               d:$("dIn").value.trim().toUpperCase(),
-               s:($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "",
-               c:($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P"};
-    if($("prevIn").value !== "") v.prev = +$("prevIn").value;
-    return v;
+    return {
+      s: ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "",
+      h: +hIn.value || 0, i: F.i, f: F.f, p: F.p,
+      prev: $("prevIn").value === "" ? null : +$("prevIn").value,
+      km: +$("kmIn").value || 0,
+      d: $("dIn").value.trim().toUpperCase(),
+      n: $("nIn").value.trim(),
+      c: ($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P"
+    };
   };
+  const registreForm = estatForm;
   const pintaCalc = () => {
     const E = eurosDia(y,m,d,registreForm(),P,tipusIRPF);
     const S = stats(y);
@@ -1230,19 +1235,16 @@ function openDay(d){
   obreCalendari($("untilIn"));
   syncH();
   pintaCalc();
+  /* com estava en obrir la fitxa, per saber després què has canviat */
+  const inicial = estatForm();
   $("shDel").onclick  = () => { applyRange(null); };
   $("shOk").onclick   = () => {
-    const s = ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "";
-    const h = +hIn.value || 0, dd = $("dIn").value.trim().toUpperCase(), n = $("nIn").value.trim();
-    const F = llegeixFitxatge();
-    const extra = {
-      i: F.i, f: F.f, p: F.p,
-      prev: $("prevIn").value === "" ? null : +$("prevIn").value,
-      km: +$("kmIn").value || 0,
-      c: ($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P"
-    };
-    if(!s && !h && !dd && !n && !extra.i && !extra.km && extra.prev === null) return applyRange(null);
-    applyRange({s, h, d:dd, n, auto: autoH && h > 0, extra});
+    const ara = estatForm();
+    /* què has tocat de veritat des que has obert la fitxa */
+    const canvis = Object.keys(ara).filter(k => JSON.stringify(ara[k]) !== JSON.stringify(inicial[k]));
+    const buit = !ara.s && !ara.h && !ara.d && !ara.n && !ara.i && !ara.km && ara.prev === null;
+    if(buit) return applyRange(null);
+    applyRange({ara, canvis, auto: autoH && ara.h > 0});
   };
 }
 function applyRange(val){
@@ -1257,34 +1259,42 @@ function applyRange(val){
     const o = ordinal(y,mm,dd);
     if(o < from || o > to) continue;
     if(val === null){ setRec(y,mm,dd,null); continue; }
-    const t = dtype(y,mm,dd);
+    const t = dtype(y,mm,dd), ancora = o === from;
+    const E = val.ara, hiHavia = rec(y,mm,dd);
     /* Un desplaçament es compta en dies naturals: si ets fora, hi ets també el
        cap de setmana i els festius. La resta d'estats (HQ, vacances, lliure
        disposició) només toquen dies amb jornada; per registrar un cap de setmana
        treballat a la seu, obre aquell dia tot sol. El dia tocat sempre s'escriu. */
-    const away = ["EST","NAC","POS"].includes(val.s);
-    if(o !== from && TYPES[t].h === 0 && !away) continue;
-    /* amb hores automàtiques cada dia agafa la seva pròpia jornada (intensiva,
-       divendres…); els dies sense jornada queden marcats però a zero hores —
-       hi ets, però no hi treballes tret que ho posis tu */
-    const h = o === from ? val.h
-            : TYPES[t].h === 0 ? 0
-            : val.auto ? TYPES[t].h : val.h;
-    const v = {};
-    if(val.s) v.s = val.s;
-    if(h) v.h = h;
-    if(val.d) v.d = val.d;
-    if(val.n && o === from) v.n = val.n;
-    const E = val.extra;
-    if(E){
-      /* el fitxatge concret és del dia que has obert; en la resta del rang només
-         s'hi repeteix si aquell dia té jornada, i les hores previstes són les seves */
-      if(o === from){ if(E.i) v.i = E.i; if(E.f) v.f = E.f; if(E.p) v.p = E.p;
-                      if(E.prev !== null) v.prev = E.prev; }
-      else if(E.i && TYPES[t].h > 0){ v.i = E.i; if(E.f) v.f = E.f; if(E.p) v.p = E.p; }
-      if(E.km) v.km = E.km;
-      if(E.c === "D") v.c = "D";
-    }
+    const away = ["EST","NAC","POS"].includes(E.s);
+    if(!ancora && TYPES[t].h === 0 && !away && !hiHavia) continue;
+    /* Només es propaga el que hagis canviat. Un dia que encara no existeix només
+       es crea si el canvi és l'estat; si no, no hi ha res a què enganxar-ho. */
+    if(!ancora && !hiHavia && !val.canvis.includes("s")) continue;
+    if(!ancora && !val.canvis.length) continue;
+
+    const v = Object.assign({}, hiHavia || {});
+    delete v.t;                                   /* la marca de temps la posa setRec */
+    const posa = (k, x) => { if(x === "" || x == null || x === 0 || x === false) delete v[k]; else v[k] = x; };
+    (ancora ? Object.keys(E) : val.canvis).forEach(k => {
+      switch(k){
+        case "n": if(ancora) posa("n", E.n); break;   /* la nota és del dia concret */
+        case "s": posa("s", E.s); break;
+        case "d": posa("d", E.d); break;
+        case "km": posa("km", E.km); break;
+        case "c": posa("c", E.c === "D" ? "D" : ""); break;
+        case "prev": posa("prev", E.prev == null ? "" : E.prev); break;
+        case "p": posa("p", E.p); break;
+        case "i": case "f":
+          /* el fitxatge concret només es repeteix als dies amb jornada */
+          if(ancora || TYPES[t].h > 0) posa(k, E[k]); break;
+        case "h": {
+          /* amb hores automàtiques cada dia agafa la seva pròpia jornada
+             (intensiva, divendres…); els dies sense jornada queden a zero */
+          const h = ancora ? E.h : TYPES[t].h === 0 ? 0 : val.auto ? TYPES[t].h : E.h;
+          posa("h", h); break;
+        }
+      }
+    });
     setRec(y,mm,dd, Object.keys(v).length ? v : null);
   }
   closeSheet(); render();
