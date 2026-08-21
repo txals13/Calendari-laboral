@@ -83,6 +83,13 @@ button{cursor:pointer}
 .day .h{font-size:9.5px;font-family:monospace;color:var(--tx2);line-height:1.2}
 .day .tag{position:absolute;top:2px;right:3px;font-size:8px;font-weight:800;font-family:monospace;letter-spacing:.3px;opacity:.85}
 .day.today{box-shadow:inset 0 0 0 2px var(--gold)}
+/* dies seleccionats per arrossegament */
+.day.sel{outline:2px solid var(--gold);outline-offset:-2px;background-image:linear-gradient(var(--goldbg),var(--goldbg))}
+.grid.picking{touch-action:none;user-select:none;-webkit-user-select:none}
+.selbar{display:flex;align-items:center;gap:8px;background:var(--goldbg);border:1px solid var(--gold);
+  border-radius:9px;padding:7px 10px;margin-bottom:8px;font-size:12.5px;color:var(--goldtx)}
+.selbar b{font-family:monospace}
+.selbar .btn{margin-left:auto;padding:4px 9px;font-size:12px}
 /* calendar-type tints (when no user state) */
 .t-X{background:var(--bg0);color:var(--tx3)}
 .t-F{background:var(--yellowbg);color:var(--yellow)}
@@ -276,6 +283,8 @@ const DEFPAY = () => ({
 });
 let DB = {v:1, years:{}};
 let YEAR = 2026, MONTH = new Date().getMonth(), VIEW = "cal", SEL = null;
+/* dies marcats arrossegant el dit sobre el calendari, en format ISO */
+let SELDIES = new Set();
 
 /* Google Drive — mateix client OAuth que el Field Service Log, així que només
    funciona servit des d'un origen autoritzat (https://txals13.github.io/...).
@@ -829,6 +838,7 @@ function viewCal(){
     const cls = ["day","act"];
     if(r && r.s) cls.push("s-"+r.s); else if(t==="X"||t==="F"||t==="B") cls.push("t-"+t);
     if(today.getFullYear()===y && today.getMonth()===m && today.getDate()===d) cls.push("today");
+    if(SELDIES.has(iso(y,m,d))) cls.push("sel");
     const hh = horesDia(r);
     const h = hh ? fmtH(hh)+"h" : fmtH(TYPES[t].h);
     const tag = r && r.d ? esc(r.d) : (r && r.s ? r.s.slice(0,3) : "");
@@ -852,6 +862,9 @@ function viewCal(){
     <span class="chip">dies <b>${M.days}</b></span>
   </div>
   <div class="calwrap">
+    ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia seleccionat":"dies seleccionats"}
+      — obre'n un i el que canviïs s'aplicarà a tots
+      <button class="btn sm" id="selClear">Desmarca</button></div>` : ""}
     <div class="wk">${WDAYS.map(w=>`<div>${w}</div>`).join("")}</div>
     <div class="grid" id="grid">${cells}</div>
   </div>
@@ -861,7 +874,54 @@ function viewCal(){
 function wireCal(){
   $("mPrev").onclick = () => { MONTH--; if(MONTH<0){MONTH=11; YEAR--; syncYearSel();} render(); };
   $("mNext").onclick = () => { MONTH++; if(MONTH>11){MONTH=0; YEAR++; syncYearSel();} render(); };
-  $("grid").querySelectorAll(".day.act").forEach(el => el.onclick = () => openDay(+el.dataset.d));
+  $("grid").querySelectorAll(".day.act").forEach(el => el.onclick = () => { if(!hoHemArrossegat) openDay(+el.dataset.d); });
+  if($("selClear")) $("selClear").onclick = () => { SELDIES.clear(); render(); };
+  marcatgePerArrossegament();
+}
+
+/* Selecció arrossegant el dit. Al mòbil, arrossegar també fa scroll, així que
+   la selecció no arrenca fins que mantens premut un moment: si mous abans,
+   s'entén que vols desplaçar la pàgina i no seleccionar. */
+let hoHemArrossegat = false;
+function marcatgePerArrossegament(){
+  const grid = $("grid");
+  const diaDe = el => el && el.classList.contains("act") ? +el.dataset.d : null;
+  const sotaEl = (x,y) => { const e = document.elementFromPoint(x,y); return e && e.closest(".day.act"); };
+  let inici = null, actiu = false, temporitzador = null, x0 = 0, y0 = 0;
+
+  const marca = fins => {
+    const a = Math.min(inici, fins), b = Math.max(inici, fins);
+    SELDIES.clear();
+    for(let d = a; d <= b; d++) SELDIES.add(iso(YEAR, MONTH, d));
+    grid.querySelectorAll(".day.act").forEach(el =>
+      el.classList.toggle("sel", SELDIES.has(iso(YEAR, MONTH, +el.dataset.d))));
+  };
+  const atura = () => { clearTimeout(temporitzador); temporitzador = null;
+    if(actiu){ actiu = false; grid.classList.remove("picking"); render(); }
+    inici = null; };
+
+  grid.addEventListener("pointerdown", e => {
+    const d = diaDe(e.target.closest(".day"));
+    if(d == null) return;
+    inici = d; x0 = e.clientX; y0 = e.clientY; hoHemArrossegat = false;
+    temporitzador = setTimeout(() => {
+      actiu = true; hoHemArrossegat = true;
+      grid.classList.add("picking");
+      try{ grid.setPointerCapture(e.pointerId); }catch(err){}
+      marca(inici);
+    }, 250);
+  });
+  grid.addEventListener("pointermove", e => {
+    if(!actiu){
+      /* s'ha mogut abans d'hora: vol fer scroll, no seleccionar */
+      if(temporitzador && Math.hypot(e.clientX-x0, e.clientY-y0) > 10){ clearTimeout(temporitzador); temporitzador = null; inici = null; }
+      return;
+    }
+    e.preventDefault();
+    const d = diaDe(sotaEl(e.clientX, e.clientY));
+    if(d != null) marca(d);
+  });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev => grid.addEventListener(ev, atura));
 }
 
 /* ── Resum ── */
@@ -1308,11 +1368,16 @@ function openDay(d){
       <div><div class="lbl">Destinació</div>
         <input class="fld" id="dIn" list="dl" maxlength="6" placeholder="CA, PL…" value="${esc(r.d||"")}" style="text-transform:uppercase">
         <datalist id="dl">${dests.map(x=>`<option value="${esc(x)}">`).join("")}</datalist></div>
-      <div><div class="lbl">Aplica fins a</div>
-        <input class="fld" id="untilIn" type="date" min="${iso(y,m,d)}" max="${y}-12-31"></div>
+      <div><div class="lbl">${SELDIES.size ? "Dies marcats" : "Aplica fins a"}</div>
+        ${SELDIES.size
+          ? `<div class="fld" style="text-align:center;font-family:monospace;color:var(--gold)">${SELDIES.size} dies</div>
+             <input type="hidden" id="untilIn" value="">`
+          : `<input class="fld" id="untilIn" type="date" min="${iso(y,m,d)}" max="${y}-12-31">`}</div>
     </div>
     <div><div class="lbl">Nota</div><input class="fld" id="nIn" maxlength="120" value="${esc(r.n||"")}" placeholder="opcional"></div>
-    <div class="note">«Aplica fins a» propaga <b>només el que hagis canviat en aquesta fitxa</b>, sigui l'estat, el fitxatge o la destinació: la resta de camps de cada dia es queden com estan. Els desplaçaments marquen també caps de setmana i festius, a zero hores; la resta d'estats i el fitxatge només toquen dies amb jornada.</div>
+    <div class="note">${SELDIES.size
+      ? "El que canviïs aquí s'aplicarà als <b>" + SELDIES.size + " dies marcats al calendari</b>."
+      : "«Aplica fins a» propaga el canvi a tot un rang de dates."} Es propaga <b>només el que hagis canviat en aquesta fitxa</b>, sigui l'estat, el fitxatge o la destinació: la resta de camps de cada dia es queden com estan. Els desplaçaments arriben també a caps de setmana i festius, a zero hores; la resta d'estats i el fitxatge només toquen dies amb jornada.</div>
     <div class="acts">
       <button class="btn dgr" id="shDel">Esborra</button>
       <button class="btn pri" id="shOk">Desa</button>
@@ -1470,9 +1535,12 @@ function applyRange(val){
     if(p[0] === y) last = {m:p[1]-1, d:p[2]};
   }
   const from = ordinal(y,m,d), to = ordinal(y,last.m,last.d);
+  /* si has marcat dies al calendari, manen ells; si no, el rang de "fins a" */
+  const marcats = SELDIES.size ? SELDIES : null;
   for(let mm=0; mm<12; mm++) for(let dd=1; dd<=mlen(y,mm); dd++){
     const o = ordinal(y,mm,dd);
-    if(o < from || o > to) continue;
+    if(marcats){ if(!marcats.has(iso(y,mm,dd)) && o !== from) continue; }
+    else if(o < from || o > to) continue;
     if(val === null){ setRec(y,mm,dd,null); continue; }
     const t = dtype(y,mm,dd), ancora = o === from;
     const E = val.ara, hiHavia = rec(y,mm,dd);
@@ -1480,8 +1548,11 @@ function applyRange(val){
        cap de setmana i els festius. La resta d'estats (HQ, vacances, lliure
        disposició) només toquen dies amb jornada; per registrar un cap de setmana
        treballat a la seu, obre aquell dia tot sol. El dia tocat sempre s'escriu. */
+    /* Saltar-se els dies sense jornada té sentit en un rang de dates, que és una
+       drecera; però si has arrossegat el dit per damunt d'un cap de setmana,
+       l'has marcat expressament i s'ha de respectar. */
     const away = ["EST","NAC","POS"].includes(E.s);
-    if(!ancora && TYPES[t].h === 0 && !away && !hiHavia) continue;
+    if(!ancora && !marcats && TYPES[t].h === 0 && !away && !hiHavia) continue;
     /* Només es propaga el que hagis canviat. Un dia que encara no existeix es
        crea si el canvi té substància pròpia —estat, fitxatge, hores o
        destinació—; els camps que només matisen un dia (km, pausa, previstes,
