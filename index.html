@@ -85,7 +85,18 @@ button{cursor:pointer}
 .day.today{box-shadow:inset 0 0 0 2px var(--gold)}
 /* dies seleccionats per arrossegament */
 .day.sel{outline:2px solid var(--gold);outline-offset:-2px;background-image:linear-gradient(var(--goldbg),var(--goldbg))}
-.grid.picking{touch-action:none;user-select:none;-webkit-user-select:none}
+/* En mode selecció el calendari deixa de fer scroll i guanya una columna a
+   l'esquerra amb els botons de setmana. */
+.picking .grid{touch-action:none;user-select:none;-webkit-user-select:none}
+.picking .wk,.picking .grid{grid-template-columns:26px repeat(7,1fr)}
+.selhead{background:var(--bg2);border:1px solid var(--br2);border-radius:6px;
+  font-size:10px;font-weight:700;color:var(--tx2);padding:0;cursor:pointer;text-transform:uppercase}
+.selhead:hover{border-color:var(--gold);color:var(--gold)}
+.selrow{aspect-ratio:auto;display:flex;align-items:center;justify-content:center;
+  background:var(--bg2);border:1px solid var(--br2);border-radius:6px;font-size:11px;
+  color:var(--tx2);cursor:pointer;font-family:monospace}
+.selrow:hover{border-color:var(--gold);color:var(--gold)}
+.mnav .on{border-color:var(--gold);color:var(--gold)}
 .selbar{display:flex;align-items:center;gap:8px;background:var(--goldbg);border:1px solid var(--gold);
   border-radius:9px;padding:7px 10px;margin-bottom:8px;font-size:12.5px;color:var(--goldtx)}
 .selbar b{font-family:monospace}
@@ -283,8 +294,13 @@ const DEFPAY = () => ({
 });
 let DB = {v:1, years:{}};
 let YEAR = 2026, MONTH = new Date().getMonth(), VIEW = "cal", SEL = null;
-/* dies marcats arrossegant el dit sobre el calendari, en format ISO */
+/* dies marcats sobre el calendari, en format ISO */
 let SELDIES = new Set();
+/* Mode de selecció. Ha de ser explícit: al mòbil, `touch-action` s'ha de
+   declarar ABANS que comenci el gest —un cop el navegador ha decidit que
+   arrossegar és fer scroll, ja no hi ha marxa enrere—, i per això la versió
+   amb pressió mantinguda no funcionava. */
+let PICKING = false;
 
 /* Google Drive — mateix client OAuth que el Field Service Log, així que només
    funciona servit des d'un origen autoritzat (https://txals13.github.io/...).
@@ -831,9 +847,14 @@ function render(){
 function viewCal(){
   const y = YEAR, m = MONTH, S = stats(y), M = S.months[m];
   const first = wday(y,m,1), n = mlen(y,m), today = new Date();
-  let cells = "";
-  for(let i=0;i<first;i++) cells += '<div class="day pad"></div>';
+  let cells = "", pos = 0, setmana = 1;
+  /* en mode selecció, cada fila comença amb un botó que marca la setmana sencera */
+  const botoFila = () => PICKING ? `<div class="selrow" data-fila="${setmana++}">S${setmana-1}</div>` : "";
+  cells += botoFila();
+  for(let i=0;i<first;i++){ cells += '<div class="day pad"></div>'; pos++; }
   for(let d=1; d<=n; d++){
+    if(pos && pos % 7 === 0) cells += botoFila();
+    pos++;
     const t = dtype(y,m,d), r = rec(y,m,d);
     const cls = ["day","act"];
     if(r && r.s) cls.push("s-"+r.s); else if(t==="X"||t==="F"||t==="B") cls.push("t-"+t);
@@ -853,6 +874,7 @@ function viewCal(){
   <div class="mnav">
     <button id="mPrev">‹</button>
     <div class="mtitle">${MONTHS[m].toUpperCase()} ${y}</div>
+    <button id="btnPick" class="${PICKING?"on":""}" title="Selecciona dies">☑</button>
     <button id="mNext">›</button>
   </div>
   <div class="chips" style="margin-bottom:10px">
@@ -861,67 +883,88 @@ function viewCal(){
     <span class="chip ${M.saldo>=0?"pos":"neg"}">saldo <b>${sgn(M.saldo)}</b> h</span>
     <span class="chip">dies <b>${M.days}</b></span>
   </div>
-  <div class="calwrap">
-    ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia seleccionat":"dies seleccionats"}
+  <div class="calwrap${PICKING?" picking":""}">
+    ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia marcat":"dies marcats"}
       — obre'n un i el que canviïs s'aplicarà a tots
       <button class="btn sm" id="selClear">Desmarca</button></div>` : ""}
-    <div class="wk">${WDAYS.map(w=>`<div>${w}</div>`).join("")}</div>
+    <div class="wk">${PICKING?'<div></div>':""}${WDAYS.map((w,i) =>
+      PICKING ? `<button class="selhead" data-col="${i}">${w}</button>` : `<div>${w}</div>`).join("")}</div>
     <div class="grid" id="grid">${cells}</div>
   </div>
   <div class="leg">${leg}</div>
-  <div class="note">Toca un dia per marcar-lo. Des de l'editor pots aplicar el mateix estat a un rang de dates.</div>`;
+  <div class="note">${PICKING
+    ? "Toca els dies per marcar-los, o arrossega el dit per marcar-ne uns quants. <b>dl, dt, dc…</b> marquen tots els dies d'aquella columna —tots els divendres, per exemple— i <b>S1, S2…</b> marquen la setmana sencera. Després obre qualsevol dia marcat i el que canviïs s'aplicarà a tots."
+    : "Toca un dia per obrir-lo. Amb <b>☑</b> entres al mode de selecció per marcar-ne uns quants alhora."}</div>`;
 }
 function wireCal(){
   $("mPrev").onclick = () => { MONTH--; if(MONTH<0){MONTH=11; YEAR--; syncYearSel();} render(); };
   $("mNext").onclick = () => { MONTH++; if(MONTH>11){MONTH=0; YEAR++; syncYearSel();} render(); };
-  $("grid").querySelectorAll(".day.act").forEach(el => el.onclick = () => { if(!hoHemArrossegat) openDay(+el.dataset.d); });
+  $("grid").querySelectorAll(".day.act").forEach(el => el.onclick = () => {
+    if(PICKING){ if(!arrossegant) commuta([+el.dataset.d]); }
+    else openDay(+el.dataset.d);
+  });
   if($("selClear")) $("selClear").onclick = () => { SELDIES.clear(); render(); };
-  marcatgePerArrossegament();
+  $("btnPick").onclick = () => { PICKING = !PICKING; if(!PICKING) SELDIES.clear(); render(); };
+  if(PICKING) einesDeSeleccio();
 }
 
-/* Selecció arrossegant el dit. Al mòbil, arrossegar també fa scroll, així que
-   la selecció no arrenca fins que mantens premut un moment: si mous abans,
-   s'entén que vols desplaçar la pàgina i no seleccionar. */
-let hoHemArrossegat = false;
-function marcatgePerArrossegament(){
-  const grid = $("grid");
-  const diaDe = el => el && el.classList.contains("act") ? +el.dataset.d : null;
-  const sotaEl = (x,y) => { const e = document.elementFromPoint(x,y); return e && e.closest(".day.act"); };
-  let inici = null, actiu = false, temporitzador = null, x0 = 0, y0 = 0;
-
-  const marca = fins => {
-    const a = Math.min(inici, fins), b = Math.max(inici, fins);
-    SELDIES.clear();
-    for(let d = a; d <= b; d++) SELDIES.add(iso(YEAR, MONTH, d));
-    grid.querySelectorAll(".day.act").forEach(el =>
-      el.classList.toggle("sel", SELDIES.has(iso(YEAR, MONTH, +el.dataset.d))));
+/** Marca o desmarca un grup de dies: si ja hi eren tots, els treu. */
+function commuta(dies){
+  const claus = dies.map(d => iso(YEAR, MONTH, d));
+  const totsHiSon = claus.every(k => SELDIES.has(k));
+  claus.forEach(k => totsHiSon ? SELDIES.delete(k) : SELDIES.add(k));
+  render();
+}
+let arrossegant = false;
+function einesDeSeleccio(){
+  const grid = $("grid"), n = mlen(YEAR, MONTH);
+  /* columna: tots els dilluns, tots els divendres… */
+  document.querySelectorAll(".selhead").forEach(b => b.onclick = () => {
+    const col = +b.dataset.col, dies = [];
+    for(let d=1; d<=n; d++) if(wday(YEAR,MONTH,d) === col) dies.push(d);
+    commuta(dies);
+  });
+  /* fila: la setmana sencera */
+  grid.querySelectorAll(".selrow").forEach(b => b.onclick = () => {
+    const fila = +b.dataset.fila, first = wday(YEAR,MONTH,1), dies = [];
+    for(let i=0;i<7;i++){ const d = (fila-1)*7 + i - first + 1; if(d >= 1 && d <= n) dies.push(d); }
+    commuta(dies);
+  });
+  /* arrossegar: aquí ja és segur, el mode és explícit i el grid té touch-action:none */
+  const diaSota = (x,y) => { const e = document.elementFromPoint(x,y); const c = e && e.closest(".day.act");
+                             return c ? +c.dataset.d : null; };
+  let inici = null;
+  const pinta = fins => {
+    const a = Math.min(inici,fins), b = Math.max(inici,fins);
+    grid.querySelectorAll(".day.act").forEach(el => {
+      const d = +el.dataset.d;
+      el.classList.toggle("sel", (d>=a && d<=b) || SELDIES.has(iso(YEAR,MONTH,d)));
+    });
   };
-  const atura = () => { clearTimeout(temporitzador); temporitzador = null;
-    if(actiu){ actiu = false; grid.classList.remove("picking"); render(); }
-    inici = null; };
-
   grid.addEventListener("pointerdown", e => {
-    const d = diaDe(e.target.closest(".day"));
+    const d = diaSota(e.clientX, e.clientY);
     if(d == null) return;
-    inici = d; x0 = e.clientX; y0 = e.clientY; hoHemArrossegat = false;
-    temporitzador = setTimeout(() => {
-      actiu = true; hoHemArrossegat = true;
-      grid.classList.add("picking");
-      try{ grid.setPointerCapture(e.pointerId); }catch(err){}
-      marca(inici);
-    }, 250);
+    inici = d; arrossegant = false;
+    try{ grid.setPointerCapture(e.pointerId); }catch(err){}
   });
   grid.addEventListener("pointermove", e => {
-    if(!actiu){
-      /* s'ha mogut abans d'hora: vol fer scroll, no seleccionar */
-      if(temporitzador && Math.hypot(e.clientX-x0, e.clientY-y0) > 10){ clearTimeout(temporitzador); temporitzador = null; inici = null; }
-      return;
-    }
-    e.preventDefault();
-    const d = diaDe(sotaEl(e.clientX, e.clientY));
-    if(d != null) marca(d);
+    if(inici == null) return;
+    const d = diaSota(e.clientX, e.clientY);
+    if(d != null && d !== inici){ arrossegant = true; pinta(d); }
   });
-  ["pointerup","pointercancel","pointerleave"].forEach(ev => grid.addEventListener(ev, atura));
+  grid.addEventListener("pointerup", e => {
+    if(inici == null) return;
+    const d = diaSota(e.clientX, e.clientY);
+    if(arrossegant && d != null){
+      const a = Math.min(inici,d), b = Math.max(inici,d), dies = [];
+      for(let x=a; x<=b; x++) dies.push(x);
+      dies.forEach(x => SELDIES.add(iso(YEAR,MONTH,x)));
+      render();
+    }
+    inici = null;
+    setTimeout(() => arrossegant = false, 0);   /* que el clic posterior no ho desfaci */
+  });
+  grid.addEventListener("pointercancel", () => { inici = null; arrossegant = false; });
 }
 
 /* ── Resum ── */
