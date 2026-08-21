@@ -399,7 +399,7 @@ function stats(y){
     theoYTD:0, doneYTD:0, vacYTD:0, ldYTD:0,
     days:{HQ:0,EST:0,NAC:0,POS:0,VAC:0,LD:0,DC:0}, worked:0,
     ponts:0, festius:0, capsSetmana:0, festiusTreballats:0,
-    extra:0, extraYTD:0, curt:0,
+    extra:0, extraYTD:0, curt:0, pay:o.pay,
     /* dies fora: naturals (hi ets encara que sigui diumenge) i treballats */
     diesLaborables:0, diesLabYTD:0, foraTreb:0, foraTrebEST:0, foraTrebNAC:0,
     /* utilització: hores fora de planta, partides en treball/desplaçament i en
@@ -1091,19 +1091,26 @@ function viewTrv(){
   <div class="kpis" style="margin-bottom:10px">
     ${kpi("Dies fora", foraNat, "dies naturals · " + S.days.EST + " estranger, " + S.days.NAC + " nacional")}
     ${kpi("Treballats a fora", S.foraTreb, S.foraTrebEST + " estranger, " + S.foraTrebNAC + " nacional")}
-    ${kpi("Fora / laborables fins avui", pct(S.foraTreb, S.diesLabYTD), S.foraTreb + " de " + S.diesLabYTD + " dies laborables transcorreguts")}
+    ${kpi("Fora / laborables fins avui", pct(S.foraTreb, S.diesLabYTD),
+       S.diesLabYTD ? S.foraTreb + " de " + S.diesLabYTD + " dies laborables transcorreguts"
+                    : "el contracte encara no ha començat")}
     ${kpi("Fora / treballats", pct(S.foraTreb, S.worked), S.foraTreb + " de " + S.worked + " dies amb hores")}
   </div>
   <div class="card">
     <div class="card-t">Proporció de desplaçament — ${y}</div>
     <table>
       <thead><tr><th>Concepte</th><th>Dies</th><th>% fins avui</th><th>% de l'any</th></tr></thead>
-      <tr><td style="text-align:left">Dies laborables del calendari</td><td>${S.diesLabYTD} / ${S.diesLaborables}</td><td class="dim">100 %</td><td class="dim">100 %</td></tr>
+      <tr><td style="text-align:left">Dies laborables del calendari</td><td>${S.diesLabYTD} / ${S.diesLaborables}</td>
+        <td class="dim">${S.diesLabYTD ? "100 %" : "—"}</td><td class="dim">${S.diesLaborables ? "100 %" : "—"}</td></tr>
       <tr><td style="text-align:left">Dies treballats</td><td>${S.worked}</td><td class="dim">${pct(S.worked, S.diesLabYTD)}</td><td class="dim">${pct(S.worked, S.diesLaborables)}</td></tr>
       <tr><td style="text-align:left">— a l'estranger</td><td>${S.foraTrebEST}</td><td class="${S.foraTrebEST?"pos":"dim"}">${pct(S.foraTrebEST, S.diesLabYTD)}</td><td class="dim">${pct(S.foraTrebEST, S.diesLaborables)}</td></tr>
       <tr><td style="text-align:left">— nacionals</td><td>${S.foraTrebNAC}</td><td class="${S.foraTrebNAC?"pos":"dim"}">${pct(S.foraTrebNAC, S.diesLabYTD)}</td><td class="dim">${pct(S.foraTrebNAC, S.diesLaborables)}</td></tr>
       <tfoot><tr><td style="text-align:left">Total treballat fora</td><td>${S.foraTreb}</td><td class="${S.foraTreb?"pos":"dim"}">${pct(S.foraTreb, S.diesLabYTD)}</td><td class="dim">${pct(S.foraTreb, S.diesLaborables)}</td></tr></tfoot>
     </table>
+    ${S.diesLabYTD === 0 ? `<div class="note" style="color:var(--gold)">
+      <b>Encara no ha començat cap dia laborable d'aquest contracte</b>, per això la primera columna surt a zero.
+      L'alta és el ${new Date(S.pay.contracteIni+"T00:00:00").toLocaleDateString("ca-ES")}
+      i els ${S.diesLaborables} dies són els que hi ha des d'aquell dia fins a final d'any.</div>` : ""}
     <div class="note">Els <b>dies fora</b> de dalt són dies naturals —caps de setmana i festius inclosos, perquè hi ets igual— i serveixen per a dietes i desplaçaments. Aquesta taula, en canvi, compta <b>dies treballats</b>, que és el que fa servir l'exempció de l'art. 7.p. La columna «fins avui» és la que té sentit a mig any; la de l'any sencer només quadrarà quan el tinguis tot registrat.</div>
   </div>
   ${blocUtilitzacio(y, S)}
