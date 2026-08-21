@@ -898,8 +898,8 @@ function viewCal(){
   </div>
   <div class="calwrap${PICKING?" picking":""}">
     ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia marcat":"dies marcats"}
-      — obre'n un i el que canviïs s'aplicarà a tots
-      <button class="btn sm" id="selClear">Desmarca</button></div>` : ""}
+      <button class="btn sm pri" id="selEdit">Edita'ls</button>
+      <button class="btn sm" id="selClear" style="margin-left:0">Desmarca</button></div>` : ""}
     <div class="wk"><div title="Setmana">st</div>${WDAYS.map((w,i) =>
       PICKING ? `<button class="selhead" data-col="${i}">${w}</button>` : `<div>${w}</div>`).join("")}</div>
     <div class="grid" id="grid">${cells}</div>
@@ -917,7 +917,16 @@ function wireCal(){
     else openDay(+el.dataset.d);
   });
   if($("selClear")) $("selClear").onclick = () => { SELDIES.clear(); render(); };
-  $("btnPick").onclick = () => { PICKING = !PICKING; if(!PICKING) SELDIES.clear(); render(); };
+  /* Sortir del mode NO desmarca: si ho fes, marcar una columna i sortir per
+     poder obrir un dia et deixaria sense selecció, que és justament el que
+     volies aplicar. Per netejar hi ha el botó «Desmarca». */
+  $("btnPick").onclick = () => { PICKING = !PICKING; render(); };
+  if($("selEdit")) $("selEdit").onclick = () => {
+    const primer = [...SELDIES].sort()[0];
+    if(!primer) return;
+    const [yy,mm,dd] = primer.split("-").map(Number);
+    PICKING = false; YEAR = yy; MONTH = mm-1; render(); openDay(dd);
+  };
   if(PICKING) einesDeSeleccio();
 }
 
@@ -1369,6 +1378,7 @@ function openDay(d){
   const t = dtype(y,m,d), r = rec(y,m,d) || {};
   const th = TYPES[t].h;
   const HVI = parteixHora(r.vi), HI = parteixHora(r.i), HF = parteixHora(r.f), HVF = parteixHora(r.vf);
+  const aquestEsMarcat = SELDIES.size > 0 && SELDIES.has(iso(y,m,d));
   const dests = [...new Set(Object.values(yr(y).days).map(x => x.d).filter(Boolean))].sort();
   const btns = Object.entries(STATES).map(([k,v]) =>
     `<button class="stb${r.s===k?" on":""}" data-s="${k}" style="${r.s===k?`border-color:var(${v.c});color:var(${v.c})`:""}">${v.l}<small>${v.s}</small></button>`).join("");
@@ -1424,14 +1434,14 @@ function openDay(d){
       <div><div class="lbl">Destinació</div>
         <input class="fld" id="dIn" list="dl" maxlength="6" placeholder="CA, PL…" value="${esc(r.d||"")}" style="text-transform:uppercase">
         <datalist id="dl">${dests.map(x=>`<option value="${esc(x)}">`).join("")}</datalist></div>
-      <div><div class="lbl">${SELDIES.size ? "Dies marcats" : "Aplica fins a"}</div>
-        ${SELDIES.size
+      <div><div class="lbl">${aquestEsMarcat ? "Dies marcats" : "Aplica fins a"}</div>
+        ${aquestEsMarcat
           ? `<div class="fld" style="text-align:center;font-family:monospace;color:var(--gold)">${SELDIES.size} dies</div>
              <input type="hidden" id="untilIn" value="">`
           : `<input class="fld" id="untilIn" type="date" min="${iso(y,m,d)}" max="${y}-12-31">`}</div>
     </div>
     <div><div class="lbl">Nota</div><input class="fld" id="nIn" maxlength="120" value="${esc(r.n||"")}" placeholder="opcional"></div>
-    <div class="note">${SELDIES.size
+    <div class="note">${aquestEsMarcat
       ? "El que canviïs aquí s'aplicarà als <b>" + SELDIES.size + " dies marcats al calendari</b>."
       : "«Aplica fins a» propaga el canvi a tot un rang de dates."} Es propaga <b>només el que hagis canviat en aquesta fitxa</b>, sigui l'estat, el fitxatge o la destinació: la resta de camps de cada dia es queden com estan. Els desplaçaments arriben també a caps de setmana i festius, a zero hores; la resta d'estats i el fitxatge només toquen dies amb jornada.</div>
     <div class="acts">
@@ -1591,8 +1601,10 @@ function applyRange(val){
     if(p[0] === y) last = {m:p[1]-1, d:p[2]};
   }
   const from = ordinal(y,m,d), to = ordinal(y,last.m,last.d);
-  /* si has marcat dies al calendari, manen ells; si no, el rang de "fins a" */
-  const marcats = SELDIES.size ? SELDIES : null;
+  /* Si has marcat dies al calendari manen ells, però només si el dia que has
+     obert n'és un: obrir-ne un altre ha de tocar aquell dia i prou, no la
+     selecció que tenies d'abans. */
+  const marcats = (SELDIES.size && SELDIES.has(iso(y,m,d))) ? SELDIES : null;
   for(let mm=0; mm<12; mm++) for(let dd=1; dd<=mlen(y,mm); dd++){
     const o = ordinal(y,mm,dd);
     if(marcats){ if(!marcats.has(iso(y,mm,dd)) && o !== from) continue; }
