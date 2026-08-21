@@ -1299,7 +1299,7 @@ function openDay(d){
         <input class="fld" id="untilIn" type="date" min="${iso(y,m,d)}" max="${y}-12-31"></div>
     </div>
     <div><div class="lbl">Nota</div><input class="fld" id="nIn" maxlength="120" value="${esc(r.n||"")}" placeholder="opcional"></div>
-    <div class="note">«Aplica fins a» propaga <b>només el que hagis canviat en aquesta fitxa</b>: si passes de Nacional a Estranger, la resta de dies mantenen les seves hores, destinació i notes. Els desplaçaments marquen també caps de setmana i festius, a zero hores; la resta d'estats només toquen dies amb jornada.</div>
+    <div class="note">«Aplica fins a» propaga <b>només el que hagis canviat en aquesta fitxa</b>, sigui l'estat, el fitxatge o la destinació: la resta de camps de cada dia es queden com estan. Els desplaçaments marquen també caps de setmana i festius, a zero hores; la resta d'estats i el fitxatge només toquen dies amb jornada.</div>
     <div class="acts">
       <button class="btn dgr" id="shDel">Esborra</button>
       <button class="btn pri" id="shOk">Desa</button>
@@ -1444,9 +1444,12 @@ function applyRange(val){
        treballat a la seu, obre aquell dia tot sol. El dia tocat sempre s'escriu. */
     const away = ["EST","NAC","POS"].includes(E.s);
     if(!ancora && TYPES[t].h === 0 && !away && !hiHavia) continue;
-    /* Només es propaga el que hagis canviat. Un dia que encara no existeix només
-       es crea si el canvi és l'estat; si no, no hi ha res a què enganxar-ho. */
-    if(!ancora && !hiHavia && !val.canvis.includes("s")) continue;
+    /* Només es propaga el que hagis canviat. Un dia que encara no existeix es
+       crea si el canvi té substància pròpia —estat, fitxatge, hores o
+       destinació—; els camps que només matisen un dia (km, pausa, previstes,
+       compensació, nota) no inventen dies buits. */
+    const CREA = ["s","vi","i","f","vf","h","d"];
+    if(!ancora && !hiHavia && !val.canvis.some(k => CREA.includes(k))) continue;
     if(!ancora && !val.canvis.length) continue;
 
     const v = Object.assign({}, hiHavia || {});
