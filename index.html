@@ -85,17 +85,17 @@ button{cursor:pointer}
 .day.today{box-shadow:inset 0 0 0 2px var(--gold)}
 /* dies seleccionats per arrossegament */
 .day.sel{outline:2px solid var(--gold);outline-offset:-2px;background-image:linear-gradient(var(--goldbg),var(--goldbg))}
-/* En mode selecció el calendari deixa de fer scroll i guanya una columna a
-   l'esquerra amb els botons de setmana. */
+/* Columna de setmanes ISO a l'esquerra, sempre visible. En mode selecció el
+   calendari deixa de fer scroll i les setmanes i els dies passen a ser botons. */
+.wk,.grid{grid-template-columns:26px repeat(7,1fr)}
 .picking .grid{touch-action:none;user-select:none;-webkit-user-select:none}
-.picking .wk,.picking .grid{grid-template-columns:26px repeat(7,1fr)}
 .selhead{background:var(--bg2);border:1px solid var(--br2);border-radius:6px;
   font-size:10px;font-weight:700;color:var(--tx2);padding:0;cursor:pointer;text-transform:uppercase}
 .selhead:hover{border-color:var(--gold);color:var(--gold)}
-.selrow{aspect-ratio:auto;display:flex;align-items:center;justify-content:center;
-  background:var(--bg2);border:1px solid var(--br2);border-radius:6px;font-size:11px;
-  color:var(--tx2);cursor:pointer;font-family:monospace}
-.selrow:hover{border-color:var(--gold);color:var(--gold)}
+.selrow{display:flex;align-items:center;justify-content:center;font-size:10.5px;
+  color:var(--tx3);font-family:monospace;border-radius:6px}
+.picking .selrow{background:var(--bg2);border:1px solid var(--br2);color:var(--tx2);cursor:pointer}
+.picking .selrow:hover{border-color:var(--gold);color:var(--gold)}
 .mnav .on{border-color:var(--gold);color:var(--gold)}
 .selbar{display:flex;align-items:center;gap:8px;background:var(--goldbg);border:1px solid var(--gold);
   border-radius:9px;padding:7px 10px;margin-bottom:8px;font-size:12.5px;color:var(--goldtx)}
@@ -344,6 +344,14 @@ const ylen = y => isLeap(y) ? 366 : 365;
 function ordinal(y,m,d){ let n = d-1; for(let i=0;i<m;i++) n += mlen(y,i); return n; }
 /* dilluns = 0 */
 function wday(y,m,d){ return (new Date(y,m,d).getDay() + 6) % 7; }
+/** Setmana ISO: la que compta el dijous, com al calendari de l'empresa. */
+function setmanaISO(y,m,d){
+  const t = new Date(Date.UTC(y,m,d));
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay()+6)%7) + 3);   /* dijous d'aquesta setmana */
+  const primer = new Date(Date.UTC(t.getUTCFullYear(),0,4));
+  primer.setUTCDate(primer.getUTCDate() - ((primer.getUTCDay()+6)%7) + 3);
+  return 1 + Math.round((t - primer) / (7*864e5));
+}
 
 /** Tipus de dia del calendari oficial; si l'any no hi és, patró per defecte. */
 function dtype(y,m,d){
@@ -847,13 +855,18 @@ function render(){
 function viewCal(){
   const y = YEAR, m = MONTH, S = stats(y), M = S.months[m];
   const first = wday(y,m,1), n = mlen(y,m), today = new Date();
-  let cells = "", pos = 0, setmana = 1;
-  /* en mode selecció, cada fila comença amb un botó que marca la setmana sencera */
-  const botoFila = () => PICKING ? `<div class="selrow" data-fila="${setmana++}">S${setmana-1}</div>` : "";
-  cells += botoFila();
+  let cells = "", pos = 0, fila = 0;
+  /* cada fila comença amb la setmana ISO; en mode selecció, és el botó que
+     marca la setmana sencera */
+  const capFila = () => {
+    fila++;
+    const primerDia = Math.max(1, fila*7 - 6 - first + 1);
+    return `<div class="selrow" data-fila="${fila}">${setmanaISO(y,m,Math.min(primerDia,n))}</div>`;
+  };
+  cells += capFila();
   for(let i=0;i<first;i++){ cells += '<div class="day pad"></div>'; pos++; }
   for(let d=1; d<=n; d++){
-    if(pos && pos % 7 === 0) cells += botoFila();
+    if(pos && pos % 7 === 0) cells += capFila();
     pos++;
     const t = dtype(y,m,d), r = rec(y,m,d);
     const cls = ["day","act"];
@@ -887,13 +900,13 @@ function viewCal(){
     ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia marcat":"dies marcats"}
       — obre'n un i el que canviïs s'aplicarà a tots
       <button class="btn sm" id="selClear">Desmarca</button></div>` : ""}
-    <div class="wk">${PICKING?'<div></div>':""}${WDAYS.map((w,i) =>
+    <div class="wk"><div title="Setmana">st</div>${WDAYS.map((w,i) =>
       PICKING ? `<button class="selhead" data-col="${i}">${w}</button>` : `<div>${w}</div>`).join("")}</div>
     <div class="grid" id="grid">${cells}</div>
   </div>
   <div class="leg">${leg}</div>
   <div class="note">${PICKING
-    ? "Toca els dies per marcar-los, o arrossega el dit per marcar-ne uns quants. <b>dl, dt, dc…</b> marquen tots els dies d'aquella columna —tots els divendres, per exemple— i <b>S1, S2…</b> marquen la setmana sencera. Després obre qualsevol dia marcat i el que canviïs s'aplicarà a tots."
+    ? "Toca els dies per marcar-los, o arrossega el dit per marcar-ne uns quants. <b>dl, dt, dc…</b> marquen tots els dies d'aquella columna —tots els divendres, per exemple— i el <b>número de setmana</b> marca la setmana sencera. Després obre qualsevol dia marcat i el que canviïs s'aplicarà a tots."
     : "Toca un dia per obrir-lo. Amb <b>☑</b> entres al mode de selecció per marcar-ne uns quants alhora."}</div>`;
 }
 function wireCal(){
