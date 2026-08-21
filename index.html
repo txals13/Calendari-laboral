@@ -863,6 +863,7 @@ function render(){
   if(VIEW === "cal") wireCal();
   if(VIEW === "sum") wireCharts();
   if(VIEW === "nom") wireNom();
+  if(VIEW === "trv") wireTrv();
 }
 
 /* ── Calendari ── */
@@ -1118,12 +1119,27 @@ function viewTrv(){
     <div class="card-t">Dies per destinació — ${y}</div>
     <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). <b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius. <b>Treballats</b> són els que tenen hores.</div>
+    <div class="chips" style="margin-top:10px">
+      <button class="btn sm" id="viaPdfMes">Informe del mes (PDF)</button>
+      <button class="btn sm" id="viaPdfAny">Informe de l'any (PDF)</button>
+      <button class="btn sm" id="viaXlsMes">Excel del mes</button>
+      <button class="btn sm" id="viaXlsAny">Excel de l'any</button>
+    </div>
+    <div class="note">Un dia per fila amb el fitxatge, la destinació, les hores de viatge, de desplaçament i de treball al client, i la dieta, més el resum per destinació. Els imports hi surten encara que tinguis els diners amagats.</div>
   </div>
   <div class="card">
     <div class="card-t">Estades</div>
     <table><thead><tr><th>Destinació</th><th style="text-align:left">Període</th><th>Dies</th></tr></thead><tbody>${trows}</tbody></table>
     <div class="note">Els dies solts amb la mateixa destinació separats per menys de 4 dies es compten com una sola estada.</div>
   </div>`;
+}
+
+function wireTrv(){
+  const y = YEAR;
+  if($("viaPdfMes")) $("viaPdfMes").onclick = () => imprimeixViatges(y, MONTH, MONTH);
+  if($("viaPdfAny")) $("viaPdfAny").onclick = () => imprimeixViatges(y, 0, 11);
+  if($("viaXlsMes")) $("viaXlsMes").onclick = () => exportaViatgesXlsx(y, MONTH, MONTH);
+  if($("viaXlsAny")) $("viaXlsAny").onclick = () => exportaViatgesXlsx(y, 0, 11);
 }
 
 /** Utilització del tècnic. El denominador és la capacitat ORDINÀRIA del conveni
@@ -2019,6 +2035,87 @@ function imprimeixInforme(y, mDe, mA){
   window.addEventListener("afterprint", neteja);
   setTimeout(() => window.print(), 60);
 }
+/* ── Informe de viatges ──
+   Els imports hi surten sencers encara que tinguis el mode discret activat:
+   un document amb punts no serveix per presentar enlloc. */
+const eurRaw = n => (Math.round(n*100)/100).toLocaleString("ca-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+const COLS_VIATGES = ["Data","Dia","Estat","Destinació","Fitxatge","Hores","Viatge","Desplaçament","Client","Dieta (€)"];
+function filesViatges(y, mDe, mA){
+  const P = yr(y).pay, files = [];
+  const T = {hores:0, viatge:0, desp:0, client:0, dieta:0, dies:0, treballats:0};
+  const dest = {};
+  for(let m = mDe; m <= mA; m++) for(let d = 1; d <= mlen(y,m); d++){
+    const r = rec(y,m,d); if(!r || !["EST","NAC"].includes(r.s)) continue;
+    const x = calcDia(y,m,d,r,P); if(!x) continue;
+    const fitx = [r.vi, r.i, r.f, r.vf].filter(Boolean);
+    files.push([
+      iso(y,m,d), WDAYS[wday(y,m,d)], STATES[r.s].l, r.d || "",
+      fitx.length ? fitx[0] + "–" + fitx[fitx.length-1] : "",
+      x.h, x.viatge, x.desplacament, x.treball, x.dieta
+    ]);
+    T.hores += x.h; T.viatge += x.viatge; T.desp += x.desplacament;
+    T.client += x.treball; T.dieta += x.dieta; T.dies++;
+    if(x.h > 0) T.treballats++;
+    const k = (r.d || "—").toUpperCase();
+    dest[k] = dest[k] || {dies:0, treballats:0, hores:0, dieta:0};
+    dest[k].dies++; dest[k].hores += x.h; dest[k].dieta += x.dieta;
+    if(x.h > 0) dest[k].treballats++;
+  }
+  ["hores","viatge","desp","client","dieta"].forEach(k => T[k] = r2(T[k]));
+  Object.values(dest).forEach(o => { o.hores = r2(o.hores); o.dieta = r2(o.dieta); });
+  return {files, T, dest};
+}
+function imprimeixViatges(y, mDe, mA){
+  const {files, T, dest} = filesViatges(y, mDe, mA);
+  const c = yr(y).cfg;
+  const num = new Set([5,6,7,8,9]);
+  const cap = COLS_VIATGES.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
+  const cos = files.map(f => "<tr>" + f.map((v,i) =>
+      `<td${num.has(i)?' class="r"':""}>${typeof v === "number" ? (v ? (i===9?eurRaw(v):fmt(v)) : "") : esc(v)}</td>`).join("") + "</tr>").join("");
+  const ks = Object.keys(dest).sort((a,b) => dest[b].dies - dest[a].dies);
+  const resum = ks.map(k => `<tr><td>${esc(k)}</td><td class="r">${dest[k].dies}</td>
+      <td class="r">${dest[k].treballats}</td><td class="r">${fmt(dest[k].hores)}</td>
+      <td class="r">${eurRaw(dest[k].dieta)}</td></tr>`).join("");
+  document.getElementById("print").innerHTML = `
+    <h1>Desplaçaments i viatges</h1>
+    <div class="sub">
+      <div><b>${esc(c.nom || "")}</b>${c.empresa ? " · " + esc(c.empresa) : ""}</div>
+      <div>${esc(periodeText(y, mDe, mA))}</div>
+    </div>
+    <table><thead><tr>${cap}</tr></thead><tbody>${cos}</tbody>
+      <tfoot><tr>
+        <td colspan="5"><b>Totals</b> — ${T.dies} dies fora, ${T.treballats} amb hores</td>
+        <td class="r"><b>${fmt(T.hores)}</b></td><td class="r">${fmt(T.viatge)}</td>
+        <td class="r">${fmt(T.desp)}</td><td class="r">${fmt(T.client)}</td>
+        <td class="r"><b>${eurRaw(T.dieta)}</b></td>
+      </tr></tfoot></table>
+    <div class="peu">
+      <h2 style="font-size:11pt;margin:6mm 0 2mm">Resum per destinació</h2>
+      <table><thead><tr><th>Destinació</th><th class="r">Dies fora</th><th class="r">Treballats</th>
+        <th class="r">Hores</th><th class="r">Dietes (€)</th></tr></thead><tbody>${resum}</tbody></table>
+      <p><b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius, perquè s'hi és igual.
+         <b>Viatge</b> és el trajecte llarg de porta a porta; <b>desplaçament</b>, l'anar i venir diari
+         fins al client. La resta d'hores del dia són treball efectiu.</p>
+      <div class="signa"><div><span></span>Treballador/a</div><div><span></span>Empresa</div></div>
+      <p class="petit">Document generat el ${new Date().toLocaleDateString("ca-ES")} a partir del registre propi.</p>
+    </div>`;
+  document.body.classList.add("printing");
+  const neteja = () => { document.body.classList.remove("printing"); window.removeEventListener("afterprint", neteja); };
+  window.addEventListener("afterprint", neteja);
+  setTimeout(() => window.print(), 60);
+}
+function exportaViatgesXlsx(y, mDe, mA){
+  const {files, T, dest} = filesViatges(y, mDe, mA);
+  const dades = [COLS_VIATGES, ...files, [],
+    ["Totals","","","","", T.hores, T.viatge, T.desp, T.client, T.dieta],
+    [], ["Resum per destinació"], ["Destinació","Dies fora","Treballats","Hores","Dietes (€)"]];
+  Object.keys(dest).sort((a,b) => dest[b].dies - dest[a].dies)
+    .forEach(k => dades.push([k, dest[k].dies, dest[k].treballats, dest[k].hores, dest[k].dieta]));
+  const amples = [11,6,12,11,14,9,9,13,9,11];
+  const nom = "viatges-" + y + (mDe === mA ? "-" + pad(mDe+1) : "") + ".xlsx";
+  dlBlob(nom, xlsx(dades, amples, periodeText(y, mDe, mA).slice(0,31)));
+}
+
 function exportaXlsx(y, mDe, mA){
   const {files, totals} = filesInforme(y, mDe, mA);
   const dades = [COLS_INFORME, ...files, [],
