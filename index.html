@@ -1357,7 +1357,10 @@ function openDay(d){
      pausa, perquè la jornada del conveni són hores efectives i el descans no hi
      compta a dins (7:30 + 8,25 + 1 h = 16:45, com el calendari signat). Es deixa
      de calcular en el moment que la poses tu. */
-  let autoF = !r.f;
+  /* `fa` recorda si la sortida desada la va calcular l'app. Sense aquesta marca
+     no hi ha manera de distingir-la d'una que hagis escrit tu, i llavors un dia
+     ja registrat deixava de seguir l'hora d'entrada per sempre. */
+  let autoF = !r.f || r.fa === 1;
   const calculaSortida = () => {
     if(!autoF) return;
     const entrada = muntaHora($("iH").value, $("iM").value);
@@ -1387,6 +1390,7 @@ function openDay(d){
     return {
       s: ($("stb").querySelector(".stb.on")||{dataset:{}}).dataset.s || "",
       h: +hIn.value || 0, vi: F.vi, i: F.i, f: F.f, vf: F.vf, p: F.p,
+      fa: (autoF && F.f) ? 1 : 0,          /* la sortida l'hem calculada nosaltres */
       prev: $("prevIn").value === "" ? null : +$("prevIn").value,
       km: +$("kmIn").value || 0,
       d: $("dIn").value.trim().toUpperCase(),
@@ -1498,12 +1502,26 @@ function applyRange(val){
         case "c": posa("c", E.c === "D" ? "D" : ""); break;
         case "prev": posa("prev", E.prev == null ? "" : E.prev); break;
         case "p": posa("p", E.p); break;
+        case "fa": posa("fa", E.fa); break;
         case "vi": case "vf":
           /* els trams de viatge, com el fitxatge, només als dies amb jornada */
           if(ancora || TYPES[t].h > 0) posa(k, E[k]); break;
         case "i": case "f":
           /* el fitxatge concret només es repeteix als dies amb jornada */
-          if(ancora || TYPES[t].h > 0) posa(k, E[k]); break;
+          if(!ancora && TYPES[t].h === 0) break;
+          if(k === "f" && !ancora && E.fa && v.i){
+            /* si la sortida és calculada, cada dia agafa la SEVA jornada: en una
+               setmana sencera el divendres és de 6 h i no pot heretar l'hora del
+               dilluns. `prev` i `p` ja hi són, que es processen més tard. */
+            const jorn = (v.prev != null && v.prev !== "") ? +v.prev : TYPES[t].h;
+            const pau = E.p != null ? E.p : (+v.p || 0);
+            posa("f", jorn ? h2hm(hm2h(v.i) + jorn + pau) : "");
+            posa("fa", 1);
+          } else {
+            posa(k, E[k]);
+            if(k === "f") posa("fa", E.fa);
+          }
+          break;
         case "h": {
           /* amb hores automàtiques cada dia agafa la seva pròpia jornada
              (intensiva, divendres…); els dies sense jornada queden a zero */
