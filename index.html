@@ -405,6 +405,7 @@ function stats(y){
     /* utilització: hores fora de planta, partides en treball/desplaçament i en
        jornada ordinària/extraordinària */
     hForaOrd:0, hForaExt:0, hDespOrd:0, hDespExt:0, hTrebOrd:0, hTrebExt:0, hPlantaOrd:0,
+    hViatgeOrd:0, hViatgeExt:0, diesViatge:0,
     dest:{}, cfg:o.cfg
   };
   for(let m=0;m<12;m++){
@@ -438,8 +439,9 @@ function stats(y){
         if(x){
           if(r.s === "EST" || r.s === "NAC"){
             S.hForaOrd += x.ordin;      S.hForaExt += ex;
-            S.hDespOrd += x.despOrd;    S.hDespExt += x.despExt;
             S.hTrebOrd += x.trebOrd;    S.hTrebExt += x.trebExt;
+            if(x.esViatge){ S.hViatgeOrd += x.despOrd; S.hViatgeExt += x.despExt; S.diesViatge++; }
+            else          { S.hDespOrd   += x.despOrd; S.hDespExt   += x.despExt; }
           } else S.hPlantaOrd += x.ordin;
         }
       }
@@ -501,7 +503,12 @@ function tramsDia(r){
   if(anada == null && lloc == null && tornada == null) return null;
   const desp = r2((anada || 0) + (tornada || 0));
   const treball = Math.max(0, r2((lloc || 0) - (+r.p || 0)));
-  return {desp, treball, total: r2(desp + treball)};
+  /* Un dia fitxat NOMÉS amb surto→arribo, sense cap estona al lloc de treball,
+     és un dia de viatge (BCN-MEX). Si hi ha estona al lloc, els trajectes són
+     el desplaçament del dia a dia: hotel-fàbrica i tornada. */
+  const esViatge = lloc == null;
+  return {desp, treball, total: r2(desp + treball), esViatge,
+          viatge: esViatge ? desp : 0, desplacament: esViatge ? 0 : desp};
 }
 /** Hores fetes d'un dia: dels trams si n'hi ha, si no del camp d'hores. */
 function horesDia(r){
@@ -564,9 +571,13 @@ function calcDia(y,m,d,r,P){
     despExt = Math.min(desp, extra);
     despOrd = r2(desp - despExt);
   }
+  /* del temps de trajecte, quant és viatge llarg i quant desplaçament diari */
+  const esViatge = !!(T && T.esViatge);
   return {
     d, h, prev, fest, extra, via, descans, dieta: r2(dieta),
     desp, treball: r2(h - desp), ordin, despExt, despOrd,
+    esViatge, viatge: esViatge ? desp : 0, desplacament: esViatge ? 0 : desp,
+    viatgeOrd: esViatge ? despOrd : 0, viatgeExt: esViatge ? despExt : 0,
     trebOrd: r2(ordin - despOrd), trebExt: r2(extra - despExt),
     extraPagada: descans ? 0 : extra,
     generat: descans ? r2(extra * (fest ? P.factCdS : P.factLab)) : 0,
@@ -1124,12 +1135,14 @@ function blocUtilitzacio(y, S){
       ${fila("Capacitat ordinària disponible", cap, "100 %")}
       ${fila("Fora de planta", S.hForaOrd, p(S.hForaOrd), S.hForaOrd?"pos":"dim")}
       ${fila("treball al client", S.hTrebOrd, p(S.hTrebOrd), "", 1)}
+      ${fila("viatge", S.hViatgeOrd, p(S.hViatgeOrd), "", 1)}
       ${fila("desplaçament", S.hDespOrd, p(S.hDespOrd), "", 1)}
       ${fila("A planta", S.hPlantaOrd, p(S.hPlantaOrd))}
       <tfoot>
         <tr><td style="text-align:left"><b>Servei exterior extraordinari</b></td>
             <td><b>${fmt(S.hForaExt)}</b></td><td class="${S.hForaExt?"neg":"dim"}">+${p(S.hForaExt)}</td></tr>
         ${fila("treball al client", S.hTrebExt, "+"+p(S.hTrebExt), "", 1)}
+        ${fila("viatge", S.hViatgeExt, "+"+p(S.hViatgeExt), "", 1)}
         ${fila("desplaçament", S.hDespExt, "+"+p(S.hDespExt), "", 1)}
         <tr><td style="text-align:left">Total dedicat a servei exterior</td>
             <td>${fmt(foraTot)}</td><td class="dim">${p(foraTot)}</td></tr>
@@ -1144,9 +1157,10 @@ function blocUtilitzacio(y, S){
     <div class="chips" style="margin-top:8px">
       <span class="chip">productiu <b>${p(S.hTrebOrd)}</b></span>
       <span class="chip">travel ratio <b>${foraTot > 0 ? fmt(despTot/foraTot*100)+" %" : "—"}</b></span>
-      <span class="chip">desplaçament fora de jornada <b>${fmt(S.hDespExt)}</b> h</span>
+      <span class="chip">dies de viatge <b>${S.diesViatge}</b></span>
+      <span class="chip">viatge fora de jornada <b>${fmt(S.hViatgeExt)}</b> h</span>
     </div>
-    <div class="note"><b>Desplaçament</b> és de porta de casa a porta d'hotel, hotel-fàbrica i tornada; la resta de les hores del dia són treball efectiu al client. Les <b>extraordinàries queden sota la ratlla</b>: si les sumessis al percentatge, barrejaries capacitat ordinària amb hores extres i el número deixaria de voler dir res. El viatge que cap dins la jornada <b>no</b> és extraordinari pel fet de ser viatge; el que la supera, sí. Per això el desplaçament s'imputa primer a les hores extres. Els caps de setmana i festius no tenen jornada, així que tot el que hi facis hi surt com a extraordinari.
+    <div class="note"><b>Viatge</b> és el trajecte llarg —un dia fitxat només amb «surto → arribo», sense estona al lloc de treball, com un BCN-MEX. <b>Desplaçament</b> és l'anar i venir del dia a dia: hotel-fàbrica i tornada. La resta de les hores del dia són treball efectiu al client. Les <b>extraordinàries queden sota la ratlla</b>: si les sumessis al percentatge, barrejaries capacitat ordinària amb hores extres i el número deixaria de voler dir res. El viatge que cap dins la jornada <b>no</b> és extraordinari pel fet de ser viatge; el que la supera, sí. Per això el desplaçament s'imputa primer a les hores extres. Els caps de setmana i festius no tenen jornada, així que tot el que hi facis hi surt com a extraordinari.
       <br><b>A</b> és quina part de la jornada ordinària passes fora de planta. <b>B</b> són les hores addicionals que has necessitat perquè el servei exterior no cabia dins la jornada: si creix, és senyal que el departament necessita més mans.
       <br>La <b>capacitat</b> és l'objectiu de l'any: hores del calendari menys les dels dies que marquis com a vacances. Ara són ${fmt(cap)} h; amb la bossa sencera de vacances marcada baixarà a les 1.746 h del conveni, que és el denominador correcte —el temps de vacances no és capacitat disponible.</div>
   </div>`;
@@ -1494,6 +1508,10 @@ function openDay(d){
   let autoF = !r.f || r.fa === 1;
   const calculaSortida = () => {
     if(!autoF) return;
+    /* Si el dia comença amb un trajecte no sabem si és un viatge pur (BCN-MEX,
+       només surto→arribo) o un dia de feina a fora. Inventar-hi una sortida
+       convertiria el viatge en una estada al client, així que no s'hi toca. */
+    if($("viH").value) return;
     const entrada = muntaHora($("iH").value, $("iM").value);
     if(!entrada) return;
     const jorn = $("prevIn").value === "" ? th : +$("prevIn").value;
@@ -1508,7 +1526,9 @@ function openDay(d){
     if(t){
       assegurarOpcio(hIn, t.total); autoH = false;
       nota.innerHTML = `Del fitxatge: <b>${fmt(t.total)} h</b>`
-        + (t.desp ? ` · desplaçament ${fmt(t.desp)} h · al client ${fmt(t.treball)} h` : "");
+        + (t.esViatge ? ` · <b>viatge</b> ${fmt(t.viatge)} h`
+           : t.desp ? ` · desplaçament ${fmt(t.desp)} h · al client ${fmt(t.treball)} h`
+           : ` · al client ${fmt(t.treball)} h`);
     } else nota.textContent = "";
   };
   /* El tipus d'IRPF recorre tot l'any: el calculem un cop en obrir la fitxa. */
