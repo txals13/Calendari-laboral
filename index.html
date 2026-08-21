@@ -192,6 +192,7 @@ td.dim{color:var(--tx3)}
     <span class="logo">CALENDARI LABORAL</span>
     <select id="yearSel" title="Any"></select>
     <button id="btnSync" title="Sincronització">○</button>
+    <button id="btnPriv" title="Amaga els imports">👁</button>
     <button id="btnTheme" title="Tema">🌙</button>
     <button id="btnCfg" title="Ajustos">⚙️</button>
   </div>
@@ -250,7 +251,10 @@ const MSHORT = ["GEN","FEB","MAR","ABR","MAI","JUN","JUL","AGO","SET","OCT","NOV
 const WDAYS  = ["dl","dt","dc","dj","dv","ds","dg"];
 
 /* ───────────────────────── Dades ───────────────────────── */
-const KEY = "cal_v1_data", KTHM = "cal_v1_thm", KTOK = "cal_v1_tok", KROOT = "cal_v1_root";
+const KEY = "cal_v1_data", KTHM = "cal_v1_thm", KTOK = "cal_v1_tok", KROOT = "cal_v1_root", KPRIV = "cal_v1_priv";
+/* preferència d'aquest dispositiu, no va a Drive: al mòbil pots voler-lo i a
+   l'ordinador de casa no */
+let PRIVAT = false;
 const DEFCFG = () => ({vacH:144, ldH:12, carry:0, target:null});
 /* Paràmetres de nòmina — valors inicials presos del full ⚙️ Config del
    simulador 2026. Tot el motor llegeix d'aquí: canviant un número es recalcula. */
@@ -1024,7 +1028,10 @@ function blocUtilitzacio(y, S){
 }
 
 /* ── Nòmina ── */
-const eur = n => (Math.round(n*100)/100).toLocaleString("ca-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+/* Mode discret: amaga els imports. Tot el que són diners passa per aquí, així
+   que amb una línia queden coberts la Nòmina, la fitxa del dia i els ajustos.
+   Les hores no s'amaguen: són el registre de jornada, no el teu sou. */
+const eur = n => PRIVAT ? "•••" : (Math.round(n*100)/100).toLocaleString("ca-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
 function viewNom(){
   const y = YEAR, m = MONTH, P = yr(y).pay, M = payMonth(y,m);
   const li = (l,v,cls,ind) => `<tr><td style="text-align:left${ind?";padding-left:16px":""}"${ind?' class="dim"':''}>${l}</td><td class="${cls||""}">${v}</td></tr>`;
@@ -1646,9 +1653,13 @@ const PAYFIELDS = [
 ];
 function openPay(){
   const y = YEAR, P = yr(y).pay, pv = previsibles(y);
+  /* amb el mode discret, els imports d'aquí també s'amaguen: el salari és el
+     primer que es veu si algú et mira la pantalla per damunt de l'espatlla */
+  const DINERS = new Set(["salari","esmorzar","dinar","sopar","pernocta","capSetmana","kmEur",
+                          "intlLab","intlFest","topall","pensioConjuge","aliments","art7pLimit"]);
   const grp = PAYFIELDS.map(([tit,fs]) => `<div class="lbl">${tit}</div><div class="row2">`
     + fs.map(([k,l,st]) => `<div><div class="note" style="margin:0 0 3px">${l}</div>`
-        + `<input class="fld pf" data-k="${k}" type="number" step="${st}" value="${P[k]}"></div>`).join("")
+        + `<input class="fld pf" data-k="${k}" type="${PRIVAT && DINERS.has(k) ? "password" : "number"}" step="${st}" value="${P[k]}"></div>`).join("")
     + `</div>`).join("");
   const sw = (k,l) => `<button class="stb pb${P[k]?" on":""}" data-b="${k}" style="${P[k]?"border-color:var(--gold);color:var(--gold)":""}">${l}<small>${P[k]?"sí":"no"}</small></button>`;
   openSheet(`
@@ -2089,6 +2100,14 @@ function syncYearSel(){
   list.unshift(list[0]-1); list.push(list[list.length-1]+1);
   sel.innerHTML = [...new Set(list)].map(y => `<option value="${y}"${y===YEAR?" selected":""}>${y}</option>`).join("");
 }
+function setPrivat(on){
+  PRIVAT = !!on;
+  const b = $("btnPriv");
+  b.textContent = PRIVAT ? "🙈" : "👁";
+  b.title = PRIVAT ? "Imports amagats — toca per mostrar-los" : "Amaga els imports";
+  b.style.color = PRIVAT ? "var(--gold)" : "";
+  try{ localStorage.setItem(KPRIV, PRIVAT ? "1" : "0"); }catch(e){}
+}
 function setTheme(light){
   document.documentElement.classList.toggle("light", light);
   $("btnTheme").textContent = light ? "☀️" : "🌙";
@@ -2101,11 +2120,13 @@ function init(){
   YEAR = CAL[now.getFullYear()] ? now.getFullYear() : 2026;
   MONTH = (now.getFullYear() === YEAR) ? now.getMonth() : 0;
   setTheme((()=>{ try{ return localStorage.getItem(KTHM) === "l"; }catch(e){ return false; } })());
+  setPrivat((()=>{ try{ return localStorage.getItem(KPRIV) === "1"; }catch(e){ return false; } })());
   syncYearSel();
   $("yearSel").onchange = e => { YEAR = +e.target.value; render(); };
   $("btnTheme").onclick = () => { setTheme(!document.documentElement.classList.contains("light")); render(); };
   $("btnCfg").onclick   = openCfg;
   $("btnSync").onclick  = () => sync(true);
+  $("btnPriv").onclick  = () => { setPrivat(!PRIVAT); render(); if($("sheet").classList.contains("on")) closeSheet(); };
   $("scrim").onclick    = closeSheet;
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => { VIEW = t.dataset.v; render(); });
   document.addEventListener("keydown", e => { if(e.key === "Escape") closeSheet(); });
