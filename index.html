@@ -927,9 +927,11 @@ function viewCal(){
 function wireCal(){
   $("mPrev").onclick = () => { MONTH--; if(MONTH<0){MONTH=11; YEAR--; syncYearSel();} render(); };
   $("mNext").onclick = () => { MONTH++; if(MONTH>11){MONTH=0; YEAR++; syncYearSel();} render(); };
+  /* En mode selecció el toc es resol al pointerup: la graella captura el punter
+     per poder arrossegar, i això fa que el `click` s'atribueixi a la graella en
+     lloc de la cel·la, de manera que marcar un dia solt no arribava enlloc. */
   $("grid").querySelectorAll(".day.act").forEach(el => el.onclick = () => {
-    if(PICKING){ if(!arrossegant) commuta([+el.dataset.d]); }
-    else openDay(+el.dataset.d);
+    if(!PICKING) openDay(+el.dataset.d);
   });
   if($("selClear")) $("selClear").onclick = () => { SELDIES.clear(); render(); };
   /* Sortir del mode NO desmarca: si ho fes, marcar una columna i sortir per
@@ -968,8 +970,16 @@ function einesDeSeleccio(){
     commuta(dies);
   });
   /* arrossegar: aquí ja és segur, el mode és explícit i el grid té touch-action:none */
-  const diaSota = (x,y) => { const e = document.elementFromPoint(x,y); const c = e && e.closest(".day.act");
-                             return c ? +c.dataset.d : null; };
+  /* Quina cel·la hi ha sota unes coordenades. Es compara amb la posició de cada
+     cel·la en lloc de fer servir elementFromPoint, que amb el punter capturat
+     per la graella no sempre respon el que esperes. */
+  const diaSota = (x,y) => {
+    for(const c of grid.querySelectorAll(".day.act")){
+      const r = c.getBoundingClientRect();
+      if(x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return +c.dataset.d;
+    }
+    return null;
+  };
   let inici = null;
   const pinta = fins => {
     const a = Math.min(inici,fins), b = Math.max(inici,fins);
@@ -979,9 +989,11 @@ function einesDeSeleccio(){
     });
   };
   grid.addEventListener("pointerdown", e => {
-    const d = diaSota(e.clientX, e.clientY);
-    if(d == null) return;
-    inici = d; arrossegant = false;
+    /* al pointerdown el destí encara és la cel·la; després de capturar el
+       punter passa a ser la graella, i llavors cal elementFromPoint */
+    const c = e.target.closest && e.target.closest(".day.act");
+    if(!c) return;
+    inici = +c.dataset.d; arrossegant = false;
     try{ grid.setPointerCapture(e.pointerId); }catch(err){}
   });
   grid.addEventListener("pointermove", e => {
@@ -997,9 +1009,10 @@ function einesDeSeleccio(){
       for(let x=a; x<=b; x++) dies.push(x);
       dies.forEach(x => SELDIES.add(iso(YEAR,MONTH,x)));
       render();
+    } else if(!arrossegant){
+      commuta([inici]);                          /* toc simple: marca o desmarca */
     }
-    inici = null;
-    setTimeout(() => arrossegant = false, 0);   /* que el clic posterior no ho desfaci */
+    inici = null; arrossegant = false;
   });
   grid.addEventListener("pointercancel", () => { inici = null; arrossegant = false; });
 }
