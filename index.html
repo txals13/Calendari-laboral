@@ -499,7 +499,10 @@ const durada = (x,y) => { const a = hm2h(x), b = hm2h(y); if(a == null || b == n
                           let d = b - a; if(d < 0) d += 24; return d; };   /* pot travessar la mitjanit */
 function tramsDia(r){
   if(!r) return null;
-  const anada = durada(r.vi, r.i), lloc = durada(r.i, r.f), tornada = durada(r.f, r.vf);
+  let anada = durada(r.vi, r.i), lloc = durada(r.i, r.f), tornada = durada(r.f, r.vf);
+  /* Un viatge fitxat amb la primera hora i l'última, saltant-se les del mig:
+     és un sol trajecte de porta a porta i s'ha d'entendre igual. */
+  if(anada == null && lloc == null && tornada == null && r.vi && r.vf) anada = durada(r.vi, r.vf);
   if(anada == null && lloc == null && tornada == null) return null;
   const desp = r2((anada || 0) + (tornada || 0));
   const treball = Math.max(0, r2((lloc || 0) - (+r.p || 0)));
@@ -1403,26 +1406,30 @@ function openDay(d){
     <div class="lbl">Estat del dia</div>
     <div class="stbtns" id="stb">${btns}</div>
     <div class="lbl">Fitxatge</div>
+    <div class="lbl" style="margin:6px 0 4px">① Anada · el trajecte fins on vagis</div>
     <div class="row2">
-      <div><div class="note" style="margin-bottom:3px">surto</div>
+      <div><div class="note" style="margin-bottom:3px">surto de casa/hotel</div>
         <div class="hm"><select class="fld" id="viH">${optsUnitat(HVI.h,23)}</select>
           <span>:</span><select class="fld" id="viM">${optsUnitat(HVI.m,59)}</select></div></div>
-      <div><div class="note" style="margin-bottom:3px">arribo al lloc</div>
+      <div><div class="note" style="margin-bottom:3px">hi arribo</div>
         <div class="hm"><select class="fld" id="iH">${optsUnitat(HI.h,23)}</select>
           <span>:</span><select class="fld" id="iM">${optsUnitat(HI.m,59)}</select></div></div>
     </div>
-    <div class="row2" style="margin-top:8px">
+    <div class="lbl" style="margin:10px 0 4px">② Tornada · només si el mateix dia tornes</div>
+    <div class="row2">
       <div><div class="note" style="margin-bottom:3px">surto del lloc</div>
         <div class="hm"><select class="fld" id="fH">${optsUnitat(HF.h,23)}</select>
           <span>:</span><select class="fld" id="fM">${optsUnitat(HF.m,59)}</select></div></div>
-      <div><div class="note" style="margin-bottom:3px">arribo</div>
+      <div><div class="note" style="margin-bottom:3px">arribo a casa/hotel</div>
         <div class="hm"><select class="fld" id="vfH">${optsUnitat(HVF.h,23)}</select>
           <span>:</span><select class="fld" id="vfM">${optsUnitat(HVF.m,59)}</select></div></div>
     </div>
     <div style="margin-top:8px"><div class="note" style="margin-bottom:3px">pausa (h)</div>
       <select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select></div>
-    <div class="note" style="margin-top:4px">Posant l'hora d'arribada, la de sortida es calcula sola: jornada prevista més la pausa. Si la canvies tu, mana la teva.
-      <br>Un dia a planta només omple <b>arribo</b> i <b>surto del lloc</b>. Un dia de només viatge, <b>surto</b> i <b>arribo al lloc</b>.</div>
+    <div class="note" style="margin-top:6px">
+      <b>Un viatge</b> (BCN-MEX) només omple l'<b>anada</b>: surto i hi arribo.
+      <br><b>Un dia a planta</b> només omple <b>hi arribo</b> i <b>surto del lloc</b>; la sortida es calcula sola amb la jornada més la pausa, i si la canvies tu mana la teva.
+      <br><b>Un dia de feina a fora</b> les omple totes quatre: el temps entre «hi arribo» i «surto del lloc» és treball al client, i la resta, desplaçament.</div>
     <div class="lbl">Hores fetes</div>
     <div class="hrow">
       <button id="hMinus">−</button>
