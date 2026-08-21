@@ -768,6 +768,11 @@ function parteixHora(s){
 }
 /** Munta "HH:MM"; sense hora no hi ha fitxatge, i el minut buit val 0. */
 const muntaHora = (h,m) => h === "" ? "" : pad(+h)+":"+pad(+m||0);
+/** Hores decimals → "HH:MM", donant la volta si passa de mitjanit. */
+function h2hm(x){
+  let t = Math.round(x * 60) % 1440; if(t < 0) t += 1440;
+  return pad(Math.floor(t/60)) + ":" + pad(t % 60);
+}
 /** Amb minuts lliures el total no cau en trams de 0,25 (07:07→16:43 són 9,10 h),
     i assignar-lo a un <select> que no el té el deixaria buit. L'hi afegim. */
 function assegurarOpcio(sel, v){
@@ -1269,7 +1274,8 @@ function openDay(d){
     </div>
     <div style="margin-top:8px"><div class="note" style="margin-bottom:3px">pausa (h)</div>
       <select class="fld" id="pIn">${optsNum(r.p!=null?r.p:"", 4, 0.25, "0", 0.25)}</select></div>
-    <div class="note" style="margin-top:4px">Un dia a planta només omple <b>arribo</b> i <b>surto del lloc</b>. Un dia de només viatge, <b>surto</b> i <b>arribo al lloc</b>.</div>
+    <div class="note" style="margin-top:4px">Posant l'hora d'arribada, la de sortida es calcula sola: jornada prevista més la pausa. Si la canvies tu, mana la teva.
+      <br>Un dia a planta només omple <b>arribo</b> i <b>surto del lloc</b>. Un dia de només viatge, <b>surto</b> i <b>arribo al lloc</b>.</div>
     <div class="lbl">Hores fetes</div>
     <div class="hrow">
       <button id="hMinus">−</button>
@@ -1340,7 +1346,22 @@ function openDay(d){
     vf: muntaHora($("vfH").value, $("vfM").value),
     p: +$("pIn").value || 0
   });
+  /* L'hora de sortida del lloc surt sola de l'entrada: jornada prevista MÉS la
+     pausa, perquè la jornada del conveni són hores efectives i el descans no hi
+     compta a dins (7:30 + 8,25 + 1 h = 16:45, com el calendari signat). Es deixa
+     de calcular en el moment que la poses tu. */
+  let autoF = !r.f;
+  const calculaSortida = () => {
+    if(!autoF) return;
+    const entrada = muntaHora($("iH").value, $("iM").value);
+    if(!entrada) return;
+    const jorn = $("prevIn").value === "" ? th : +$("prevIn").value;
+    if(!jorn) return;                       /* dia sense jornada: no hi ha res a calcular */
+    const s = parteixHora(h2hm(hm2h(entrada) + jorn + (+$("pIn").value || 0)));
+    $("fH").value = s.h; $("fM").value = s.m;
+  };
   const syncH = () => {
+    calculaSortida();
     const F = llegeixFitxatge();
     const t = tramsDia(F), nota = $("hCalc");
     if(t){
@@ -1402,8 +1423,14 @@ function openDay(d){
         !x.extra && !x.dieta ? "Sense extres ni dieta: aquest dia no genera part variable." : ""}
       ${x.via !== "-" ? `<br>El règim de dieta el marca l'<b>estat del dia</b> (${STATES[registreForm().s].l}), no el codi de destinació.` : ""}</div>`;
   };
+  /* Aquest va PRIMER: si toques la sortida ha de manar la teva, i syncH
+     recalcularia per damunt si s'executés abans d'abaixar la marca. */
+  ["fH","fM"].forEach(id =>
+    ["input","change"].forEach(ev => $(id).addEventListener(ev, () => autoF = false)));
   ["viH","viM","iH","iM","fH","fM","vfH","vfM","pIn"].forEach(id =>
     ["input","change"].forEach(ev => $(id).addEventListener(ev, syncH)));
+  /* canviar la jornada prevista sí que la ha de recalcular */
+  $("prevIn").addEventListener("change", syncH);
   /* Els escoltadors van al contenidor de la fitxa, no al panell: el panell es
      reaprofita per als altres fulls i, penjats allà, s'hi acumulaven a cada
      obertura i petaven quan els camps del dia ja no hi eren. */
