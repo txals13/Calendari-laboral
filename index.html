@@ -2174,9 +2174,15 @@ function mergeDB(a, b){
       days[k] = (ar.t||0) !== (br.t||0) ? ((ar.t||0) > (br.t||0) ? ar : br)
               : (JSON.stringify(ar) <= JSON.stringify(br) ? ar : br);
     });
+    /* Els ajustos i els paràmetres de nòmina van junts amb la mateixa marca de
+       temps. `pay` s'ha de fusionar SEMPRE: deixar-se'l feia que cada
+       sincronització et tornés el salari, les dates de contracte, les dietes i
+       el mode d'IRPF als valors per defecte. */
     const newerA = (ay.cfgT||0) >= (by.cfgT||0);
+    const tria = k => (newerA ? ay[k] : by[k]) || ay[k] || by[k] || {};
     out.years[y] = {days, cfgT: Math.max(ay.cfgT||0, by.cfgT||0),
-                    cfg: Object.assign(DEFCFG(), (newerA ? ay.cfg : by.cfg) || ay.cfg || by.cfg || {})};
+                    cfg: Object.assign(DEFCFG(), tria("cfg")),
+                    pay: Object.assign(DEFPAY(), tria("pay"))};
   });
   return out;
 }
