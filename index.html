@@ -314,12 +314,85 @@ let signedIn = false, syncing = false, pushPending = false, pushTimer = null, la
    «has tancat la sessió» de «només cal tornar a autoritzar», que és un toc */
 let needsAuth = false;
 
-function load(){
-  try{ const r = localStorage.getItem(KEY); if(r) DB = JSON.parse(r); }catch(e){}
+/* Les dades viuen a IndexedDB, no a localStorage. El motiu no és la mida
+   d'aquesta app —un any de marques són desenes de kB— sinó que localStorage
+   té una quota d'uns 5 MB PER ORIGEN, i totes les apps de txals13.github.io
+   se la reparteixen. Amb el Field Service Log al costat (que ja va fugir cap
+   aquí pel mateix motiu) i les que vinguin, la primera que creixi faria
+   fallar les escriptures de les altres, i l'error sortiria a l'app
+   equivocada. Aquí la quota es compta en centenars de MB.
+   El testimoni, el tema i la preferència de privadesa es queden a
+   localStorage: són quatre bytes i es volen llegir de manera síncrona. */
+let idb = null;
+function idbOpen(){
+  return new Promise(res => {
+    if(!window.indexedDB){ res(null); return; }
+    try{
+      const req = indexedDB.open("cal", 1);
+      req.onupgradeneeded = e => { const db = e.target.result;
+        if(!db.objectStoreNames.contains("kv")) db.createObjectStore("kv"); };
+      req.onsuccess = e => res(e.target.result);
+      req.onerror   = () => res(null);
+      req.onblocked = () => res(null);
+    }catch(e){ res(null); }
+  });
+}
+function idbGet(db, key){
+  return new Promise(res => {
+    try{ const r = db.transaction("kv","readonly").objectStore("kv").get(key);
+         r.onsuccess = () => res(r.result); r.onerror = () => res(undefined); }
+    catch(e){ res(undefined); }
+  });
+}
+function idbSet(db, key, val){
+  return new Promise((res, rej) => {
+    try{ const t = db.transaction("kv","readwrite");
+         t.objectStore("kv").put(val, key);
+         t.oncomplete = () => res(true);
+         t.onerror = () => rej(t.error || new Error("escriptura fallida"));
+         t.onabort  = () => rej(t.error || new Error("escriptura avortada")); }
+    catch(e){ rej(e); }
+  });
+}
+/** Obre l'emmagatzematge i, el primer cop, s'endú el que hi hagués a
+    localStorage cap a IndexedDB, alliberant-ne la còpia vella. */
+async function load(){
+  idb = await idbOpen();
+  if(idb){
+    const v = await idbGet(idb, "db");
+    if(v && v.years) DB = v;
+    else{
+      try{
+        const r = localStorage.getItem(KEY);
+        if(r){
+          const o = JSON.parse(r);
+          /* Només esborrem la còpia vella si la nova hi ha arribat de debò. */
+          if(o && o.years){ DB = o; await idbSet(idb, "db", DB); localStorage.removeItem(KEY); }
+        }
+      }catch(e){}
+    }
+  } else {
+    /* Sense IndexedDB (algun mode privat) seguim com sempre. */
+    try{ const r = localStorage.getItem(KEY); if(r) DB = JSON.parse(r); }catch(e){}
+  }
   if(!DB.years) DB = {v:1, years:{}};
 }
+/** Desa sense fer esperar qui crida: el DB en memòria ja és la font de
+    veritat per pintar, i tots els cridants són «desa i segueix». */
+let saveErr = false;
+function persist(){
+  if(idb) return idbSet(idb, "db", DB).catch(avisaDesat);
+  try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){ avisaDesat(e); }
+  return Promise.resolve();
+}
+/* Un sol avís: amb la quota plena, cada tecla en dispararia un. */
+function avisaDesat(e){
+  if(saveErr) return;
+  saveErr = true;
+  alert("No s'han pogut desar les dades: "+((e && e.message) || e));
+}
 function save(){
-  try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){ alert("No s'han pogut desar les dades: "+e.message); }
+  persist();
   schedulePush();
 }
 function yr(y){
@@ -2334,7 +2407,9 @@ async function sync(interactive){
       else { syncErr = "Error llegint de Drive ("+r.status+")."; setSyncUI(); return; }
     }
     if(remote && remote.years) DB = mergeDB(DB, remote);
-    try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){}
+    /* Desem el resultat de la fusió abans de pujar-lo: si la pujada falla o
+       tanques l'app a mitges, el que has baixat ja és aquí. */
+    await persist();
     await push();
     lastSync = Date.now();
     render();
@@ -2421,8 +2496,11 @@ function setTheme(light){
   document.querySelector('meta[name=theme-color]').content = light ? "#ffffff" : "#111827";
   try{ localStorage.setItem(KTHM, light ? "l" : "d"); }catch(e){}
 }
-function init(){
-  load();
+async function init(){
+  /* L'única espera de l'arrencada: obrir IndexedDB i llegir-ne el DB. Tot el
+     que ve després segueix sent síncron, i `render()` continua treballant
+     sobre el DB en memòria com sempre. */
+  await load();
   const now = new Date();
   YEAR = CAL[now.getFullYear()] ? now.getFullYear() : 2026;
   MONTH = (now.getFullYear() === YEAR) ? now.getMonth() : 0;

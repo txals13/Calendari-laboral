@@ -112,7 +112,14 @@ L'autorització de Google dura una hora i no es refresca sola: passat aquest
 temps el punt es posa ◐ i amb un toc es renova. Mentrestant els canvis es desen
 aquí i pugen quan tornis a autoritzar; no es perd res.
 
-Sense connectar, les dades viuen només al `localStorage` d'aquell navegador;
+Sense connectar, les dades viuen només en aquell navegador, a **IndexedDB**
+(base `cal`, magatzem `kv`, clau `db`). No a `localStorage`: la seva quota és
+d'uns 5 MB **per origen**, i totes les apps servides des de
+`txals13.github.io` se la reparteixen, així que la primera que cresqués faria
+fallar les escriptures de les altres. Hi queden només el testimoni, el tema i
+la preferència de privadesa. Si tenies dades de la versió anterior, es mouen
+soles el primer cop que obres l'app i la còpia vella s'allibera.
+
 «Exporta còpia (JSON)» serveix per traslladar-les a mà o guardar-ne una còpia.
 
 ### Regles que convé saber
