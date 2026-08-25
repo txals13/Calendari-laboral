@@ -68,31 +68,40 @@ renda; contrasta-la amb el teu assessor.
 
 ## Preu de l'hora i comparativa amb l'autònom
 
-Al **Resum**, al final, hi ha dues targetes. La primera parteix el **salari fix**
-anual per les hores de conveni i en treu tres preus per hora: el brut, el que et
-queda net després de Seguretat Social i IRPF, i el que li costes a l'empresa. No
-hi entren hores extres ni dietes, que canvien cada any i inflarien el número.
+Al **Resum**, al final, hi ha dues targetes. La primera dóna el preu de l'hora
+**real**: al numerador hi va tot el que cobres —salari, pagues extres, hores
+extres pagades i dietes— i al denominador tot el temps que hi poses, **viatges i
+desplaçaments inclosos**. No és el preu de conveni (salari fix contra 1.746 h
+teòriques), sinó el que et surt a la pràctica. Vacances, lliure disposició i
+descans compensat queden fora del divisor: es cobren, però no són hores fetes.
 
-La segona resol el camí invers: partint d'aquell net anual, hi suma la quota
+Es calcula sobre el **període registrat**, no sobre l'any sencer: si has entrat
+l'agost, comparar cinc mesos de sou contra dotze de despeses no voldria dir res.
+La targeta et diu quins mesos i quants dies fitxats hi entren.
+
+La segona resol el camí invers: partint d'aquell net, hi suma la quota
 d'autònoms, les despeses del negoci i l'IRPF fins a trobar què hauries de
-facturar, i ho reparteix entre les hores que de debò pots cobrar.
+facturar, i ho reparteix entre les hores que de debò pots cobrar. La quota i les
+despeses van **prorratejades als mateixos mesos** del període.
 
 | Supòsit | Per defecte | Què vol dir |
 |---|---|---|
 | SS a càrrec de l'empresa | 0,32 | tant per u sobre el brut |
 | Quota d'autònoms | 400 €/mes | tram mitjà de la quota per ingressos reals |
-| Despeses del negoci | 3.000 €/any | gestoria, assegurances, eines, desplaçaments no facturats |
+| Despeses del negoci | 3.000 €/any | gestoria, assegurances, eines, despeses no facturades |
 | Hores facturables | 0,80 | administració, ofertes i buits entre clients no es cobren |
 
 Els quatre són **supòsits editables** a *Nòmina → Paràmetres de nòmina*, no valors
-del conveni. Amb els inicials i un salari de 47.000 €: **21,09 €/h** nets
-d'assalariat contra **36,65 €/h** a facturar com a autònom, 1,74 vegades més.
+del conveni. Sense cap dia fitxat encara, la targeta cau al preu de conveni i
+t'avisa que ho fa.
 
-⚠️ És una comparació, no un pressupost. L'IRPF hi va al mateix tipus que la teva
-nòmina i, com a autònom, la base seria més alta i el tipus real pujaria. Tampoc
-hi entren l'atur, la baixa per malaltia, les vacances pagades ni la indemnització,
-que d'assalariat tens i d'autònom no: **pren el número com a mínim, no com a
-sostre.**
+⚠️ És una comparació, no un pressupost. L'IRPF de l'autònom hi va al mateix tipus
+que la teva nòmina i, com que la base seria més alta, el tipus real pujaria.
+Tampoc hi entren l'atur, la baixa per malaltia, les vacances pagades ni la
+indemnització, que d'assalariat tens i d'autònom no: **pren el número com a
+mínim, no com a sostre.** Les dietes compensen despeses i no són sou; la targeta
+et diu quants €/h en són, perquè si com a autònom factures hotel i desplaçaments
+a part, els has de restar del preu.
 
 ## Sense connexió
 

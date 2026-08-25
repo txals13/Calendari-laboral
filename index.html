@@ -662,7 +662,10 @@ function calcDia(y,m,d,r,P){
     gaudit: r.s === "DC" ? prev : 0,
     /* un dia compta per a la proporció de l'art. 7.p si és festiu/cap de setmana
        o si hi has registrat hores; un laborable buit queda fora */
-    computable: fest || h > 0
+    computable: fest || h > 0,
+    /* vacances, lliure disposició i descans no són hores treballades: han de
+       quedar fora del divisor del preu per hora */
+    treballat: !noEsTreballa && h > 0
   };
 }
 function payDay(y,m,d,P){ return calcDia(y,m,d,rec(y,m,d),P); }
@@ -1366,55 +1369,100 @@ function viewNom(){
     ${anual.exempt > P.art7pLimit ? '<div class="note"><b style="color:var(--red)">Límit de l\'art. 7.p superat.</b> L\'excés per damunt de '+eur(P.art7pLimit)+' € tributa.</div>' : ""}
     <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div></div>`;
 }
-/** Preu de l'hora com a empleat i què hauries de cobrar com a autònom per
-    quedar-te el mateix net. Es fa sobre el salari fix anual, sense extres ni
-    dietes, perquè si no compararies coses diferents. */
-function preuHora(y){
-  const P = yr(y).pay;
-  const hores = P.horesAny || 1;
-  const brutAny = P.salari;
-  /* SS del treballador: la base va topada mes a mes */
-  const baseAny = Math.min(P.topall, P.salari/12) * 12;
-  const ssTreb = r2(baseAny * (P.ssCC + P.ssMEI + P.ssAtur + P.ssFP));
-  const tipus = irpfRate(y);
-  const irpf = r2((brutAny - ssTreb) > 0 ? brutAny * tipus : 0);
-  const netAny = r2(brutAny - ssTreb - irpf);
-  const costEmpresa = r2(brutAny * (1 + (+P.ssEmpresa || 0)));
+/** Preu de l'hora real: tot el que cobres partit per tot el temps que hi poses.
+    Al numerador hi va el brut sencer —salari, pagues extres, hores extres
+    pagades i dietes—, i al denominador les hores fitxades de debò, viatge i
+    desplaçament inclosos. No és el preu de conveni, que només mira el salari
+    fix contra les 1.746 h teòriques: és el que et surt a la pràctica.
 
-  /* Autònom: has de cobrir el mateix net, més la teva quota, les despeses i
-     l'IRPF que et tocarà. Es resol cap enrere des del net. */
-  const quotaAny = r2((+P.quotaAutonom || 0) * 12);
-  const despeses = +P.despesesAut || 0;
-  const facturacio = r2(netAny / Math.max(0.01, 1 - tipus) + quotaAny + despeses);
+    Es fa sobre el PERÍODE REGISTRAT, no sobre l'any sencer. Si has entrat
+    l'agost, l'any encara no ha passat, i comparar cinc mesos de sou contra
+    dotze de despeses no voldria dir res: els costos fixos de l'autònom es
+    prorrategen als mateixos mesos. */
+function preuHora(y){
+  const P = yr(y).pay, A = payYear(y);
+  let fix = 0, extres = 0, dietes = 0, m1 = -1, m2 = -1;
+  let hTot = 0, hOrd = 0, hExt = 0, hTreb = 0, hViatge = 0, hDesp = 0, diesTreb = 0;
+  A.mesos.forEach((M,m) => {
+    if(!M.dies.length) return;
+    if(m1 < 0) m1 = m; m2 = m;
+    fix    += M.salari + M.pagaExtra;
+    extres += M.extraNac + M.extraInt;
+    dietes += M.dietaNac + M.dietaInt;
+    M.dies.forEach(x => { if(!x.treballat) return;
+      diesTreb++; hTot += x.h; hOrd += x.ordin; hExt += x.extra;
+      hTreb += x.treball; hViatge += x.viatge; hDesp += x.desplacament; });
+  });
+  [fix,extres,dietes,hTot,hOrd,hExt,hTreb,hViatge,hDesp] =
+    [fix,extres,dietes,hTot,hOrd,hExt,hTreb,hViatge,hDesp].map(r2);
+
+  /* Sense res fitxat no hi ha preu real: cau al de conveni i s'avisa. */
+  const real = hTot > 0;
+  const mesos = real ? A.mesosAmbDades : 12;
+  const brut = real ? A.brut : P.salari;
+  const ss   = real ? (-A.ss || 0)  : r2(Math.min(P.topall, P.salari/12) * 12 * (P.ssCC + P.ssMEI + P.ssAtur + P.ssFP));
+  const tipus = irpfRate(y);
+  const irpf = real ? (-A.irpf || 0) : r2(P.salari * tipus);
+  const net  = real ? A.net   : r2(brut - ss - irpf);
+  const hores = real ? hTot : (P.horesAny || 1);
+  const costEmpresa = r2(brut * (1 + (+P.ssEmpresa || 0)));
+  /* quant del preu per hora són dietes: com a autònom això no es cobra per hora,
+     es factura a part al client, i per això va separat */
+  const hDietes = real ? dietes/hores : 0;
+
+  /* Autònom: has de cobrir el mateix net, més la quota, les despeses i l'IRPF.
+     Es resol cap enrere des del net; els costos fixos van als mesos del període. */
+  const quotaAny = r2((+P.quotaAutonom || 0) * mesos);
+  const despeses = r2((+P.despesesAut || 0) * mesos / 12);
+  const facturacio = r2(net / Math.max(0.01, 1 - tipus) + quotaAny + despeses);
   const irpfAut = r2((facturacio - despeses - quotaAny) * tipus);
   const horesFact = r2(hores * (+P.ocupacio || 1));
-  return {hores, brutAny, ssTreb, irpf, netAny, costEmpresa, tipus,
+  return {real, mesos, m1, m2, diesTreb,
+          hores, hOrd, hExt, hTreb, hViatge, hDesp, hDespTot: r2(hViatge + hDesp),
+          fix, extres, dietes, brut, ss, irpf, net, tipus, costEmpresa,
           quotaAny, despeses, facturacio, irpfAut, horesFact,
-          hBrut: brutAny/hores, hNet: netAny/hores, hCost: costEmpresa/hores,
+          hBrut: brut/hores, hNet: net/hores, hCost: costEmpresa/hores, hDietes,
           hAutonom: horesFact > 0 ? facturacio/horesFact : 0};
 }
 function blocPreuHora(y){
   const H = preuHora(y), P = yr(y).pay;
   const f = (l,v,cls,ind) => `<tr><td style="text-align:left${ind?";padding-left:16px":""}"${ind?' class="dim"':""}>${l}</td><td class="${cls||""}">${v}</td></tr>`;
+  const periode = H.real
+    ? (H.m1 === H.m2 ? MONTHS[H.m1].toLowerCase() : MSHORT[H.m1].toLowerCase()+"–"+MSHORT[H.m2].toLowerCase())
+      + " " + y + " · " + H.mesos + (H.mesos===1?" mes":" mesos") + " · " + H.diesTreb + " dies fitxats"
+    : "encara no hi ha res fitxat";
   return `
   <div class="card">
-    <div class="card-t">Preu de l'hora — ${y}</div>
+    <div class="card-t">Preu de l'hora — ${periode}</div>
     <div class="kpis" style="margin-bottom:10px">
       <div class="kpi hero"><div class="k">Net a la butxaca</div><div class="v pos">${eur(H.hNet)}</div>
-        <div class="s">€/h · ${eur(H.netAny)} € l'any</div></div>
-      <div class="kpi"><div class="k">Brut de conveni</div><div class="v">${eur(H.hBrut)}</div>
-        <div class="s">€/h · ${eur(H.brutAny)} € l'any</div></div>
+        <div class="s">€/h · ${eur(H.net)} € en ${fmt(H.hores)} h</div></div>
+      <div class="kpi"><div class="k">Brut per hora</div><div class="v">${eur(H.hBrut)}</div>
+        <div class="s">€/h · ${eur(H.brut)} € meritats</div></div>
       <div class="kpi"><div class="k">Cost per a l'empresa</div><div class="v">${eur(H.hCost)}</div>
-        <div class="s">€/h · ${eur(H.costEmpresa)} € l'any</div></div>
+        <div class="s">€/h · ${eur(H.costEmpresa)} € amb la seva SS</div></div>
     </div>
+    ${H.real ? "" : `<div class="note" style="color:var(--gold)"><b>Encara no hi ha hores fitxades.</b> Mentrestant això és el preu de conveni: salari fix sobre les ${fmt(H.hores)} h teòriques. Fitxa uns quants dies i passarà a fer-se amb les hores i els complements de debò.</div>`}
     <table>
-      ${f("Salari fix anual", eur(H.brutAny) + " €")}
-      ${f("Seguretat Social del treballador", eur(H.ssTreb) + " €", "neg", 1)}
-      ${f("IRPF al " + fmt(H.tipus*100) + " %", eur(H.irpf) + " €", "neg", 1)}
-      ${f("Hores de conveni", fmt(H.hores) + " h", "dim")}
+      ${f("Salari i pagues extres", eur(H.fix) + " €")}
+      ${f("Hores extres pagades", eur(H.extres) + " €")}
+      ${f("Dietes", eur(H.dietes) + " €")}
+      ${f("BRUT MERITAT", eur(H.brut) + " €")}
+      ${f("Seguretat Social", eur(-H.ss) + " €", "neg", 1)}
+      ${f("IRPF al " + fmt(H.tipus*100) + " %", eur(-H.irpf) + " €", "neg", 1)}
+      ${f("Net", eur(H.net) + " €", "pos")}
       <tfoot><tr><td style="text-align:left">NET PER HORA</td><td class="pos">${eur(H.hNet)} €/h</td></tr></tfoot>
     </table>
-    <div class="note">Només el <b>salari fix</b>: no hi entren hores extres ni dietes, que no es cobren cada any igual i inflarien el preu hora. El cost per a l'empresa hi suma un ${fmt((+P.ssEmpresa||0)*100)} % de Seguretat Social a càrrec seu — un supòsit, no un número del conveni.</div>
+    ${H.real ? `<table style="margin-top:10px">
+      ${f("Hores al client", fmt(H.hTreb) + " h", "dim")}
+      ${f("Hores de viatge", fmt(H.hViatge) + " h", "dim")}
+      ${f("Hores de desplaçament", fmt(H.hDesp) + " h", "dim")}
+      ${f("de les quals extraordinàries", fmt(H.hExt) + " h", "dim", 1)}
+      <tfoot><tr><td style="text-align:left">HORES REALITZADES</td><td>${fmt(H.hores)} h</td></tr></tfoot>
+    </table>` : ""}
+    <div class="note">Hi entra <b>tot el que cobres</b> —salari, pagues extres, hores extres i dietes— partit per <b>tot el temps que hi poses</b>, viatges i desplaçaments inclosos. Vacances, lliure disposició i descans compensat queden fora del divisor: es cobren, però no són hores treballades.
+      <br>El cost per a l'empresa hi suma un ${fmt((+P.ssEmpresa||0)*100)} % de Seguretat Social a càrrec seu, que és un supòsit editable i no un número del conveni.${
+      H.real && H.hDietes > 0 ? ` D'aquest preu per hora, <b>${eur(H.hDietes)} €/h</b> són dietes: compensen despeses, no són sou.` : ""}</div>
   </div>
   <div class="card">
     <div class="card-t">Com a autònom, per guanyar el mateix</div>
@@ -1422,20 +1470,22 @@ function blocPreuHora(y){
       <div class="kpi hero"><div class="k">Preu hora a cobrar</div><div class="v pos">${eur(H.hAutonom)}</div>
         <div class="s">€/h · ${fmt(H.hAutonom/(H.hNet||1))}× el que ara et queda net</div></div>
       <div class="kpi"><div class="k">Facturació necessària</div><div class="v">${eur(H.facturacio)}</div>
-        <div class="s">€ l'any, sense IVA</div></div>
+        <div class="s">€ en ${H.mesos} ${H.mesos===1?"mes":"mesos"}, sense IVA</div></div>
       <div class="kpi"><div class="k">Hores facturables</div><div class="v">${fmt(H.horesFact)}</div>
         <div class="s">${fmt((+P.ocupacio||0)*100)} % de ${fmt(H.hores)} h</div></div>
     </div>
     <table>
-      ${f("Net anual a igualar", eur(H.netAny) + " €")}
-      ${f("quota d'autònoms — " + eur(P.quotaAutonom) + " €/mes", eur(H.quotaAny) + " €", "neg", 1)}
-      ${f("despeses del negoci", eur(H.despeses) + " €", "neg", 1)}
-      ${f("IRPF estimat al " + fmt(H.tipus*100) + " %", eur(H.irpfAut) + " €", "neg", 1)}
+      ${f("Net a igualar", eur(H.net) + " €")}
+      ${f("quota d'autònoms — " + eur(P.quotaAutonom) + " €/mes × " + H.mesos, eur(-H.quotaAny) + " €", "neg", 1)}
+      ${f("despeses del negoci — " + eur(P.despesesAut) + " €/any × " + H.mesos + "/12", eur(-H.despeses) + " €", "neg", 1)}
+      ${f("IRPF estimat al " + fmt(H.tipus*100) + " %", eur(-H.irpfAut) + " €", "neg", 1)}
       ${f("Facturació necessària", eur(H.facturacio) + " €")}
       ${f("Hores facturables", fmt(H.horesFact) + " h", "dim")}
       <tfoot><tr><td style="text-align:left">PREU HORA A COBRAR</td><td class="pos">${eur(H.hAutonom)} €/h</td></tr></tfoot>
     </table>
     <div class="note">Es resol al revés: partint del net que ara et queda, s'hi sumen la quota, les despeses i l'IRPF fins a trobar què has de facturar, i es reparteix entre les hores que realment pots cobrar. Un autònom no factura totes les que treballa —administració, ofertes, viatges no facturats i buits entre clients—, per això les facturables són el <b>${fmt((+P.ocupacio||0)*100)} %</b> de les ${fmt(H.hores)} h.
+      <br>La quota i les despeses van <b>prorratejades als ${H.mesos} ${H.mesos===1?"mes":"mesos"} del període</b>, no a l'any sencer: si no, compararies mig any de sou contra dotze mesos de costos.${
+      H.real && H.hDietes > 0 ? ` Les dietes hi són perquè formen part del net a igualar; si com a autònom factures hotel i desplaçaments <b>a part</b>, resta'n els ${eur(H.hDietes)} €/h i et queden ${eur(H.hAutonom - H.hDietes)} €/h de mà d'obra.` : ""}
       <br><b>És una comparació, no un pressupost.</b> L'IRPF hi va al mateix tipus que la teva nòmina, i com a autònom la base seria més alta, o sigui que el tipus real pujaria: pren el número com a mínim, no com a sostre. Tampoc hi entren l'atur, la baixa per malaltia, les vacances pagades ni la indemnització, que d'assalariat tens i d'autònom no.${
       H.tipus === 0 ? ` <b style="color:var(--red)">Ara mateix el tipus d'IRPF surt 0 %</b>, així que la xifra queda curta; fixa'n un a mà als paràmetres per veure-ho realista.` : ""}</div>
     <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div>
