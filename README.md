@@ -8,8 +8,8 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
 - **Calendari** — toca un dia per marcar-lo (HQ, estranger, nacional, previst,
   vacances, lliure disposició), posar-hi les hores fetes i una destinació.
   «Aplica fins a» repeteix la marca a tot un rang de dates.
-- **Resum** — saldo de l'any i saldo fins avui, vacances restants, hores per mes
-  i detall mensual.
+- **Resum** — saldo de l'any i saldo fins avui, vacances restants, hores per mes,
+  detall mensual, i el preu de l'hora amb la comparativa com a autònom.
 - **Viatges** — dies i hores per destinació, i les estades amb el seu període.
 - **Nòmina** — meritació bruta, exempció de l'art. 7.p, Seguretat Social, IRPF i
   net estimat del mes, més la bossa d'hores de descans i el total de l'any.
@@ -65,6 +65,34 @@ avisa. `MANUAL` aplica el percentatge que hi posis.
 
 ⚠️ És una **estimació**. La liquidació definitiva es fa a la declaració de la
 renda; contrasta-la amb el teu assessor.
+
+## Preu de l'hora i comparativa amb l'autònom
+
+Al **Resum**, al final, hi ha dues targetes. La primera parteix el **salari fix**
+anual per les hores de conveni i en treu tres preus per hora: el brut, el que et
+queda net després de Seguretat Social i IRPF, i el que li costes a l'empresa. No
+hi entren hores extres ni dietes, que canvien cada any i inflarien el número.
+
+La segona resol el camí invers: partint d'aquell net anual, hi suma la quota
+d'autònoms, les despeses del negoci i l'IRPF fins a trobar què hauries de
+facturar, i ho reparteix entre les hores que de debò pots cobrar.
+
+| Supòsit | Per defecte | Què vol dir |
+|---|---|---|
+| SS a càrrec de l'empresa | 0,32 | tant per u sobre el brut |
+| Quota d'autònoms | 400 €/mes | tram mitjà de la quota per ingressos reals |
+| Despeses del negoci | 3.000 €/any | gestoria, assegurances, eines, desplaçaments no facturats |
+| Hores facturables | 0,80 | administració, ofertes i buits entre clients no es cobren |
+
+Els quatre són **supòsits editables** a *Nòmina → Paràmetres de nòmina*, no valors
+del conveni. Amb els inicials i un salari de 47.000 €: **21,09 €/h** nets
+d'assalariat contra **36,65 €/h** a facturar com a autònom, 1,74 vegades més.
+
+⚠️ És una comparació, no un pressupost. L'IRPF hi va al mateix tipus que la teva
+nòmina i, com a autònom, la base seria més alta i el tipus real pujaria. Tampoc
+hi entren l'atur, la baixa per malaltia, les vacances pagades ni la indemnització,
+que d'assalariat tens i d'autònom no: **pren el número com a mínim, no com a
+sostre.**
 
 ## Sense connexió
 
