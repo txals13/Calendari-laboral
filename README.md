@@ -31,8 +31,30 @@ i si l'escrius tu mana el teu número. La nòmina no depèn, doncs, que el calen
 sigui correcte.
 
 Cada dia pots marcar si les extres es **paguen** (+10 %) o van **a la bossa de
-descans** (×1,5 en cap de setmana o festiu, ×1 en laborable). L'estat **Descans c.**
-gasta hores de la bossa. La imputació és FIFO i caduca als 2 mesos.
+descans** (×1,5 en cap de setmana o festiu, ×1 en laborable).
+
+La bossa es gasta de dues maneres:
+
+- **un dia sencer**, amb l'estat **Descans c.**: gasta la jornada del dia;
+- **les hores que vulguis d'un dia normal**, amb el camp **Gasto de la bossa
+  d'hores** de la fitxa. «Cobreix el que falta» hi posa la diferència entre la
+  jornada i el que has fet, i la pots canviar.
+
+Exemple: el dilluns fas 8,75 h d'una jornada de 8,25 i marques les extres **en
+descans** → +0,5 h a la bossa. El divendres fas 5,5 h d'una jornada de 6 i hi
+poses 0,5 h de la bossa → la bossa torna a zero i el divendres no surt com a
+hores de menys. A la casella del calendari hi veus +0,5 i −0,5; si gastes més
+del que tens, surt en vermell i la fitxa et diu quantes hores no queden cobertes.
+
+La bossa es compta **dia a dia**, així que el que fas un dilluns ja ho pots
+gastar el divendres de la mateixa setmana. Imputació FIFO —primer les hores més
+antigues— i caducitat a final del mes N + 2: les fetes el setembre valen fins al
+30 de novembre. El saldo es veu al xip «bossa» del calendari (a final de mes) i
+al Resum (avui, amb les primeres que caduquen).
+
+El **saldo** d'hores no canvia pel fet de fer servir la bossa: la mitja hora de
+més del dilluns i la de menys del divendres ja s'hi compensen soles. La bossa és
+el registre formal de quines hores es poden tornar en temps.
 
 **Mesos d'alta parcial.** El període de contracte es posa als paràmetres (inici i,
 si escau, fi). El mes en què entres o surts no cobra sencer: el salari, la base de

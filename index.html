@@ -113,6 +113,9 @@ button{cursor:pointer}
 .s-VAC{background:var(--greenbg);color:var(--green)}
 .s-LD{background:var(--cyanbg);color:var(--cyan)}
 .day .h{color:inherit;opacity:.8}
+/* moviment de la bossa d'hores, a la cantonada de baix */
+.day .bs{position:absolute;bottom:2px;left:3px;font-size:8px;font-weight:800;font-family:monospace;line-height:1}
+.day .bs.mes{color:var(--green)}.day .bs.menys{color:var(--goldtx)}.day .bs.falta{color:var(--red)}
 /* legend */
 .leg{display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:10px;font-size:11px;color:var(--tx2)}
 .leg span{display:flex;align-items:center;gap:5px}
@@ -506,7 +509,8 @@ function stats(y){
       if(!["VAC","LD","DC","POS"].includes(r.s)){   /* aquests dies no es treballen */
         const prev = previstes(y,m,d,r);
         const ex = Math.max(0, r2(h - prev));
-        const cu = Math.max(0, r2(prev - h));
+        /* el que tapa la bossa no és una hora que et falti */
+        const cu = Math.max(0, r2(prev - h - (+r.bg || 0)));
         M.extra += ex; S.extra += ex; if(past) S.extraYTD += ex;
         M.curt += cu; S.curt += cu;
         /* utilització: fora de planta si el dia és de viatge, si no a planta */
@@ -659,7 +663,9 @@ function calcDia(y,m,d,r,P){
     trebOrd: r2(ordin - despOrd), trebExt: r2(extra - despExt),
     extraPagada: descans ? 0 : extra,
     generat: descans ? r2(extra * (fest ? P.factCdS : P.factLab)) : 0,
-    gaudit: r.s === "DC" ? prev : 0,
+    /* un dia de descans sencer gasta la jornada; un dia normal, les hores de
+       la bossa que hi hagis posat —el divendres que plegues mitja hora abans */
+    gaudit: r.s === "DC" ? prev : noEsTreballa ? 0 : Math.max(0, +r.bg || 0),
     /* un dia compta per a la proporció de l'art. 7.p si és festiu/cap de setmana
        o si hi has registrat hores; un laborable buit queda fora */
     computable: fest || h > 0,
@@ -948,6 +954,7 @@ function render(){
 function viewCal(){
   const y = YEAR, m = MONTH, S = stats(y), M = S.months[m];
   const first = wday(y,m,1), n = mlen(y,m), today = new Date();
+  const P = yr(y).pay, B = bossa(y);
   let cells = "", pos = 0, fila = 0;
   /* cada fila comença amb la setmana ISO; en mode selecció, és el botó que
      marca la setmana sencera */
@@ -969,8 +976,14 @@ function viewCal(){
     const hh = horesDia(r);
     const h = hh ? fmtH(hh)+"h" : fmtH(TYPES[t].h);
     const tag = r && r.d ? esc(r.d) : (r && r.s ? r.s.slice(0,3) : "");
+    /* + hores que entren a la bossa · − les que en gastes (vermell si no n'hi
+       havia prou). El descans sencer ja es veu pel color del dia. */
+    const x = r ? calcDia(y,m,d,r,P) : null;
+    const bs = !x ? ""
+      : x.generat ? `<span class="bs mes">+${fmtH(x.generat)}</span>`
+      : x.gaudit && r.s !== "DC" ? `<span class="bs ${B.descobert[iso(y,m,d)] ? "falta" : "menys"}">−${fmtH(x.gaudit)}</span>` : "";
     cells += `<div class="${cls.join(" ")}" data-d="${d}">`
-           + (tag ? `<span class="tag">${tag}</span>` : "")
+           + (tag ? `<span class="tag">${tag}</span>` : "") + bs
            + `<span class="n">${d}</span><span class="h">${h}</span></div>`;
   }
   const leg = [["t-X","No laborable"],["t-F","Festiu"],["t-B","Pont"],["s-HQ","HQ"],
@@ -988,6 +1001,7 @@ function viewCal(){
     <span class="chip">fetes <b>${fmt(M.done)}</b> h</span>
     <span class="chip ${M.saldo>=0?"pos":"neg"}">saldo <b>${sgn(M.saldo)}</b> h</span>
     <span class="chip">dies <b>${M.days}</b></span>
+    <span class="chip" title="Bossa d'hores de descans a final de mes">bossa <b>${fmt(B.saldo[m])}</b> h</span>
   </div>
   <div class="calwrap${PICKING?" picking":""}">
     ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia marcat":"dies marcats"}
@@ -1112,6 +1126,7 @@ function viewSum(){
     ${kpi("Saldo fins avui (h)", sgn(S.saldoYTD), "objectiu a data d'avui "+fmt(S.targetYTD), S.saldoYTD>=0?"pos":"neg")}
     ${kpi("Vacances restants (h)", fmt(S.vacLeft), "de "+fmt((+S.cfg.vacH||0)+(+S.cfg.carry||0))+" h · "+S.days.VAC+" dies marcats", S.vacLeft<0?"neg":"")}
     ${kpi("Lliure disposició (h)", fmt(S.ldLeft), "de "+fmt(+S.cfg.ldH||0)+" h", S.ldLeft<0?"neg":"")}
+    ${kpiBossa(y, kpi)}
   </div>
   <div class="card">
     <div class="card-t">Hores per mes</div>
@@ -1153,6 +1168,20 @@ function viewSum(){
       <br><b>Extres i saldo no són el mateix.</b> Les extres es compten dia a dia i no es compensen: 2 h de més un dia i 1 h de menys un altre són 2 h extres. El saldo sí que les compensa, i serveix per saber si vas avançat o endarrerit${S.curt?", que aquí van "+fmt(S.curt)+" h per sota de la jornada":""}.</div>
   </div>
   ${blocPreuHora(y)}`;
+}
+
+/** La bossa d'hores tal com està avui, i quines són les primeres a caducar. */
+function kpiBossa(y, kpi){
+  const B = bossa(y);
+  const C = B.properaCaducitat;
+  const quan = C ? new Date(y, C.mes + 1, 0) : null;      /* darrer dia d'aquell mes */
+  const descobert = r2(Object.values(B.descobert).reduce((a,h) => a + h, 0));
+  return kpi("Bossa de descans (h)", fmt(B.avui),
+    descobert ? fmt(descobert) + " h gastades sense tenir-ne"
+    : C ? fmt(C.h) + " h caduquen el " + quan.getDate() + " " + deMes(quan.getMonth())
+        + (quan.getFullYear() !== y ? " de " + quan.getFullYear() : "")
+      : "sense hores pendents",
+    descobert ? "neg" : "");
 }
 
 /* ── Viatges ── */
@@ -1354,10 +1383,11 @@ function viewNom(){
   <div class="card"><div class="card-t">E · Bossa d'hores de descans</div><table>
     ${li("Generades aquest mes", fmt(M.generat)+" h")}
     ${li("equivalents a jornades", fmt(M.jornades), "dim", 1)}
-    ${li("Gaudides aquest mes (dies DC)", fmt(M.gaudit)+" h")}
+    ${li("Gaudides aquest mes", fmt(M.gaudit)+" h")}
     ${li("Caducades aquest mes", fmt(anual.caducat[m])+" h", anual.caducat[m]?"neg":"dim")}
     <tfoot><tr><td style="text-align:left">SALDO PENDENT</td><td>${fmt(anual.saldo[m])} h</td></tr></tfoot></table>
-    <div class="note">Les hores generades caduquen si no es gaudeixen dins dels ${P.mesosCaducitat} mesos següents. Imputació FIFO: primer es gasten les més antigues.</div></div>
+    <div class="note">Les hores generades caduquen si no es gaudeixen dins dels ${P.mesosCaducitat} mesos següents. Imputació FIFO: primer es gasten les més antigues.
+      <br>Es gasten de dues maneres: un dia sencer amb l'estat <b>Descans c.</b>, o les hores que vulguis d'un dia normal amb el camp <b>Gasto de la bossa</b> de la fitxa —plegar mitja hora abans el divendres per la mitja hora de més del dilluns.</div></div>
   <div class="card"><div class="card-t">Any ${y}</div><table>
     ${li("Brut meritat", eur(anual.brut))}
     ${li("Exempt art. 7.p acumulat", eur(anual.exempt) + " / " + eur(P.art7pLimit),
@@ -1515,18 +1545,50 @@ function payYear(y){
                     A.ss+=M.ss; A.irpf+=M.irpf; A.net+=M.net; });
   A.mesosAmbDades = ms.filter(M => M.dies.length).length;
   ["brut","exempt","subjecte","ss","irpf","net"].forEach(k => A[k] = r2(A[k]));
-  /* FIFO: cada mes gasta primer les hores més antigues encara vives */
-  const lots = [];                        /* {mes, h} pendents */
-  for(let m=0;m<12;m++){
-    let cal = ms[m].gaudit;
-    for(const L of lots){ if(cal <= 0) break; const u = Math.min(L.h, cal); L.h -= u; cal -= u; }
-    let cad = 0;
-    for(const L of lots) if(m - L.mes >= P.mesosCaducitat && L.h > 0){ cad += L.h; L.h = 0; }
-    A.caducat[m] = r2(cad);
-    if(ms[m].generat > 0) lots.push({mes:m, h:ms[m].generat});
-    A.saldo[m] = r2(lots.reduce((a,L) => a + L.h, 0));
-  }
+  const B = bossa(y);
+  A.saldo = B.saldo; A.caducat = B.caducat;
   return A;
+}
+/** Bossa d'hores de descans, DIA A DIA. Cada hora gaudida gasta primer la més
+    antiga encara viva (FIFO), i les que no s'han gaudit caduquen a final del
+    mes N + mesosCaducitat: fetes el setembre amb 2 mesos, vives fins al 30 de
+    novembre.
+    Abans es feia mes a mes, i les hores generades en un mes s'afegien a la
+    bossa DESPRÉS de gastar les d'aquell mes: la mitja hora del dilluns no es
+    podia gastar el divendres de la mateixa setmana, que és justament l'ús
+    normal. Per això va per dies. */
+function bossa(y){
+  const P = yr(y).pay, cad = +P.mesosCaducitat || 0;
+  const hoy = new Date(), avuiK = iso(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const lots = [];                        /* {mes, h} pendents */
+  const viu = () => r2(lots.reduce((a,L) => a + L.h, 0));
+  const B = {saldo:Array(12).fill(0), caducat:Array(12).fill(0),
+             abans:{}, descobert:{}, avui:0, properaCaducitat:null};
+  for(let m=0;m<12;m++){
+    for(let d=1; d<=mlen(y,m); d++){
+      const k = iso(y,m,d), x = payDay(y,m,d,P);
+      B.abans[k] = viu();                 /* el que tenies en començar el dia */
+      if(x){
+        let cal = x.gaudit;
+        for(const L of lots){ if(cal <= 0) break; const u = Math.min(L.h, cal); L.h = r2(L.h - u); cal = r2(cal - u); }
+        if(cal > 0) B.descobert[k] = cal; /* gastat sense tenir-ne */
+        if(x.generat > 0) lots.push({mes:m, h:x.generat});
+      }
+      if(k === avuiK){
+        B.avui = viu();
+        const L = lots.find(L => L.h > 0);
+        if(L) B.properaCaducitat = {h: r2(lots.filter(Z => Z.mes === L.mes).reduce((a,Z) => a + Z.h, 0)),
+                                    mes: L.mes + cad};
+      }
+    }
+    let c = 0;
+    for(const L of lots) if(m - L.mes >= cad && L.h > 0){ c += L.h; L.h = 0; }
+    B.caducat[m] = r2(c);
+    B.saldo[m] = viu();
+  }
+  /* un any que ja ha passat es queda amb el saldo final; un de futur, a zero */
+  if(y < hoy.getFullYear()) B.avui = B.saldo[11];
+  return B;
 }
 
 /* ───────────────────────── Gràfics ───────────────────────── */
@@ -1689,6 +1751,14 @@ function openDay(d){
       <button class="stb${r.c!=="D"?" on":""}" data-c="P">Pagades<small>+${fmt((yr(y).pay.incrExtra||0)*100)} %</small></button>
       <button class="stb${r.c==="D"?" on":""}" data-c="D">En descans<small>a la bossa d'hores</small></button>
     </div>
+    <div id="bgBloc">
+      <div class="lbl">Gasto de la bossa d'hores</div>
+      <div class="row2">
+        <select class="fld" id="bgIn">${optsNum(r.bg!=null?r.bg:"", 12, 0.25, "0", 0.25)}</select>
+        <button class="btn sm" id="bgFalta" style="height:40px">Cobreix el que falta</button>
+      </div>
+      <div class="note" id="bgNota"></div>
+    </div>
     <div class="card" id="diaCalc" style="margin:12px 0 0;padding:10px 12px"></div>
     <div class="row2">
       <div><div class="lbl">Destinació</div>
@@ -1792,7 +1862,8 @@ function openDay(d){
       km: +$("kmIn").value || 0,
       d: $("dIn").value.trim().toUpperCase(),
       n: $("nIn").value.trim(),
-      c: ($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P"
+      c: ($("cmp").querySelector(".stb.on")||{dataset:{}}).dataset.c || "P",
+      bg: +$("bgIn").value || 0
     };
   };
   const registreForm = estatForm;
@@ -1844,9 +1915,38 @@ function openDay(d){
      obertura i petaven quan els camps del dia ja no hi eren. */
   $("diaForm").addEventListener("change", pintaCalc);
   $("diaForm").addEventListener("input", pintaCalc);
+  /* Bossa: què hi ha en començar aquest dia i quant et falta per la jornada.
+     El saldo surt del que hi ha desat, i en començar el dia, així que el que
+     escriguis aquí no el modifica: és el que tens per gastar. */
+  const disponible = bossa(y).abans[iso(y,m,d)] || 0;
+  const falta = () => {
+    const E = estatForm(), prev = E.prev != null ? E.prev : th;
+    return Math.max(0, r2(prev - (+hIn.value || 0)));
+  };
+  const pintaBossa = () => {
+    const E = estatForm(), noTreb = ["VAC","LD","DC","POS"].includes(E.s);
+    /* vacances i companyia no gasten bossa; el descans compensat la gasta
+       sencera i ja ho diu el seu botó */
+    $("bgBloc").hidden = noTreb;
+    if(noTreb) return;
+    const bg = +$("bgIn").value || 0, f = falta();
+    $("bgFalta").disabled = !f;
+    $("bgFalta").textContent = f ? `Cobreix el que falta (${fmtH(f)} h)` : "No et falta res";
+    $("bgNota").innerHTML = `A la bossa hi tens <b>${fmt(disponible)} h</b> en començar el dia.`
+      + (bg ? ` En gastes ${fmt(bg)} h i en queden <b>${fmt(Math.max(0, r2(disponible - bg)))} h</b>.` : "")
+      + (bg > disponible + 1e-9
+          ? ` <b style="color:var(--red)">No n'hi ha prou: ${fmt(r2(bg - disponible))} h quedarien sense cobrir.</b>` : "")
+      + (bg && !f ? ` <span style="color:var(--gold)">Aquest dia ja fas la jornada sencera.</span>` : "")
+      + (!bg && f ? ` Et falten ${fmt(f)} h per arribar a la jornada.` : "");
+  };
+  $("bgFalta").onclick = () => { assegurarOpcio($("bgIn"), falta()); pintaBossa(); pintaCalc(); };
+  $("diaForm").addEventListener("change", pintaBossa);
+  $("diaForm").addEventListener("input", pintaBossa);
+  $("diaForm").addEventListener("click", e => { if(e.target.closest(".stb,#hMinus,#hPlus,#hTheo")) pintaBossa(); });
   obreCalendari($("untilIn"));
   syncH();
   pintaCalc();
+  pintaBossa();
   /* com estava en obrir la fitxa, per saber després què has canviat */
   const inicial = estatForm();
   $("shDel").onclick  = () => { applyRange(null); };
@@ -1854,7 +1954,7 @@ function openDay(d){
     const ara = estatForm();
     /* què has tocat de veritat des que has obert la fitxa */
     const canvis = Object.keys(ara).filter(k => JSON.stringify(ara[k]) !== JSON.stringify(inicial[k]));
-    const buit = !ara.s && !ara.h && !ara.d && !ara.n && !ara.i && !ara.km && ara.prev === null;
+    const buit = !ara.s && !ara.h && !ara.d && !ara.n && !ara.i && !ara.km && !ara.bg && ara.prev === null;
     if(buit) return applyRange(null);
     applyRange({ara, canvis, auto: autoH && ara.h > 0});
   };
@@ -1905,6 +2005,7 @@ function applyRange(val){
         case "d": posa("d", E.d); break;
         case "km": posa("km", E.km); break;
         case "c": posa("c", E.c === "D" ? "D" : ""); break;
+        case "bg": posa("bg", E.bg); break;
         case "prev": posa("prev", E.prev == null ? "" : E.prev); break;
         case "p": posa("p", E.p); break;
         case "fa": posa("fa", E.fa); break;
