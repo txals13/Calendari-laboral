@@ -288,6 +288,8 @@ const DEFPAY = () => ({
   ssExtra:0.047, forcaMajor:false, ssExtraFM:0.02, topall:5101.20,
   solT1:0.0115, solT2:0.0125, solT3:0.0146, solLim1:0.10, solLim2:0.50, solTreb:0.1661,
   mesosExtra:[5,11],           /* juny i desembre — amb 14 pagues, 12 + 2 extres */
+  /* mesos entre que fas una hora extra o una dieta i que et surt a la nòmina */
+  retardExtres:2, retardDietes:0,
   /* comparativa amb l'autònom: tot són supòsits editables, cap ve del conveni */
   ssEmpresa:0.32, quotaAutonom:400, despesesAut:3000, ocupacio:0.80,
   irpfMode:"AUTO", irpfPct:0.1515, irpfAjust:0, irpfMin:0,
@@ -405,6 +407,8 @@ function yr(y){
   if(!DB.years[y]) DB.years[y] = {days:{}, cfg:DEFCFG()};
   const o = DB.years[y];
   if(!o.days) o.days = {};
+  /* net real cobrat, per mes ("0".."11"): {v, t} o una làpida {del:1, t} */
+  if(!o.netReal) o.netReal = {};
   /* Completem les claus que faltin SENSE substituir l'objecte: hi ha codi que
      en guarda la referència, i abans es quedava apuntant a una còpia òrfena. */
   const fill = (dst, def) => { for(const k in def) if(!(k in dst)) dst[k] = def[k]; return dst; };
@@ -444,6 +448,15 @@ const theo = (y,m,d) => TYPES[dtype(y,m,d)].h;
    dispositius. Esborrar no treu la clau, hi deixa una làpida {del:1} — si no,
    l'altre dispositiu, que encara té la versió antiga, tornaria a ressuscitar el dia. */
 const rec = (y,m,d) => { const r = yr(y).days[iso(y,m,d)]; return (r && !r.del) ? r : null; };
+/** El net que t'ha entrat al banc aquell mes, o null si encara no l'has posat. */
+const netReal = (y,m) => { const r = ((DB.years[String(y)]||{}).netReal||{})[m];
+                           return r && !r.del && r.v != null ? +r.v : null; };
+function setNetReal(y,m,v){
+  const o = yr(y);
+  if(v === null || v === ""){ if(o.netReal[m]) o.netReal[m] = {del:1, t:Date.now()}; }
+  else o.netReal[m] = {v: r2(+v), t: Date.now()};
+  save();
+}
 function setRec(y,m,d,v){
   const o = yr(y), k = iso(y,m,d);
   if(v === null){ if(o.days[k]) o.days[k] = {del:1, t:Date.now()}; }
@@ -759,12 +772,31 @@ function propAnual(y){
 /** Nòmina d'un mes. Reprodueix el bloc A–E dels fulls mensuals. */
 /* `noIrpf` talla la recursió: el tipus de retenció es calcula a partir de les
    retribucions subjectes de tot l'any, que surten d'aquesta mateixa funció. */
-function payMonth(y,m,noIrpf){
+/** Nòmina d'un mes tal com t'entra al banc AQUELL mes.
+    Les hores extres —i les dietes, si ho configures— no es cobren el mes que es
+    fan: surten a la nòmina N mesos després. Per això la part variable ve del mes
+    en què es va treballar, i el salari, l'exempció del salari i la bossa, del
+    mes mateix. Amb `sensRetard` tot és del mes: és el que aquell mes ha GENERAT,
+    que és el que cal per al preu de l'hora. */
+function payMonth(y,m,noIrpf,sensRetard){
   const P = yr(y).pay;
-  const hOrd = P.horesAny > 0 ? P.salari / P.horesAny : 0;
-  const hExtra = hOrd * (1 + P.incrExtra);
   const dies = [];
   for(let d=1; d<=mlen(y,m); d++){ const x = payDay(y,m,d,P); if(x) dies.push(x); }
+  /* d'on surt la part variable: el mes, o N mesos enrere, saltant d'any si cal */
+  const font = lag => {
+    if(sensRetard || !lag) return {y, m, dies, P};
+    let yy = y, mm = m - lag;
+    while(mm < 0){ mm += 12; yy--; }
+    /* un any que no existeix no es crea només per mirar-lo */
+    if(!DB.years[String(yy)]) return {y:yy, m:mm, dies:[], P};
+    const PP = yr(yy).pay, ds = [];
+    for(let d=1; d<=mlen(yy,mm); d++){ const x = payDay(yy,mm,d,PP); if(x) ds.push(x); }
+    return {y:yy, m:mm, dies:ds, P:PP};
+  };
+  const FE = font(+P.retardExtres || 0), FD = font(+P.retardDietes || 0);
+  /* el preu de l'hora extra és el de l'any en què es va fer */
+  const hExtra = (FE.P.horesAny > 0 ? FE.P.salari / FE.P.horesAny : 0) * (1 + FE.P.incrExtra);
+  const de = (F, f) => F.dies.reduce((a,x) => a + f(x), 0);
 
   const sum = f => dies.reduce((a,x) => a + f(x), 0);
   const M = {dies, hores:r2(sum(x=>x.h)), extraTot:r2(sum(x=>x.extra))};
@@ -777,12 +809,15 @@ function payMonth(y,m,noIrpf){
   M.divisor  = (+P.diesMesProrrata > 0) ? +P.diesMesProrrata : M.diesMes;
   M.factor   = M.divisor > 0 ? Math.min(1, M.diesAlta / M.divisor) : 0;
   M.salari    = r2(P.salari / P.pagues * M.factor);
-  M.extraNacH = r2(sum(x => x.via !== "I" ? x.extraPagada : 0));
-  M.extraIntH = r2(sum(x => x.via === "I" ? x.extraPagada : 0));
+  M.fontExtres = {y:FE.y, m:FE.m}; M.fontDietes = {y:FD.y, m:FD.m};
+  M.extraNacH = r2(de(FE, x => x.via !== "I" ? x.extraPagada : 0));
+  M.extraIntH = r2(de(FE, x => x.via === "I" ? x.extraPagada : 0));
   M.extraNac  = r2(M.extraNacH * hExtra);
   M.extraInt  = r2(M.extraIntH * hExtra);
-  M.dietaNac  = r2(sum(x => x.via === "N" ? x.dieta : 0));
-  M.dietaInt  = r2(sum(x => x.via === "I" ? x.dieta : 0));
+  M.dietaNac  = r2(de(FD, x => x.via === "N" ? x.dieta : 0));
+  M.dietaInt  = r2(de(FD, x => x.via === "I" ? x.dieta : 0));
+  /* les extres pagables fetes AQUEST mes, que es cobraran més endavant */
+  M.extraFetesH = r2(sum(x => x.extraPagada));
   /* paga extra: amb 14 pagues n'hi ha dues, i la seva part exempta va amb la
      proporció ANUAL de dies internacionals, no la del mes (⚙️ Config B73) */
   M.esExtra   = (P.mesosExtra||[]).includes(m) && M.diesAlta > 0;
@@ -791,6 +826,9 @@ function payMonth(y,m,noIrpf){
   M.propAlta  = ylen(y) > 0 ? diesAltaAny(y,P) / ylen(y) : 0;
   M.pagaExtra = M.esExtra ? r2(P.salari / P.pagues * M.propAlta) : 0;
   M.brut      = r2(M.salari + M.pagaExtra + M.extraNac + M.extraInt + M.dietaNac + M.dietaInt);
+  /* Un mes compta si hi has fitxat O si hi cobres extres o dietes d'abans: el
+     novembre sense res fitxat igualment t'entra el sou i les extres del setembre. */
+  M.teDades   = dies.length > 0 || (M.extraNac + M.extraInt + M.dietaNac + M.dietaInt) > 0;
 
   /* B — exempció art. 7.p */
   M.diesComp = dies.filter(x => x.computable).length;
@@ -851,7 +889,7 @@ function previsibles(y){
   let reg = 0, regSS = 0, estim = 0, mesosReg = 0, mesosEst = 0;
   for(let m=0;m<12;m++){
     const M = payMonth(y,m,true);
-    if(M.dies.length){ reg += M.subjecte; regSS += -M.ss; mesosReg++; }
+    if(M.teDades){ reg += M.subjecte; regSS += -M.ss; mesosReg++; }
     /* Els mesos del contracte que encara no tens entrats també s'han de
        preveure: si no, el tipus es calcula sobre un any incomplet i surt massa
        baix. Se n'estima només la part fixa —salari i paga extra—, perquè
@@ -1339,29 +1377,33 @@ function viewNom(){
   const y = YEAR, m = MONTH, P = yr(y).pay, M = payMonth(y,m);
   const li = (l,v,cls,ind) => `<tr><td style="text-align:left${ind?";padding-left:16px":""}"${ind?' class="dim"':''}>${l}</td><td class="${cls||""}">${v}</td></tr>`;
   const hOrd = P.horesAny>0 ? P.salari/P.horesAny : 0;
-  if(!M.dies.length) return `
+  if(!M.teDades) return `
     ${nomNav(y,m)}
     <div class="card"><div class="card-t">${MONTHS[m]} ${y}</div>
       <div class="note">Cap dia registrat aquest mes. Fitxa les hores a la pestanya Calendari i aquí hi sortirà la nòmina.</div>
-      <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div></div>`;
+      <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div></div>
+    ${blocNetReal(y,m,null)}`;
   const anual = payYear(y);
   return `
   ${nomNav(y,m)}
   <div class="kpis" style="margin-bottom:10px">
     <div class="kpi hero"><div class="k">Net estimat (€)</div><div class="v">${eur(M.net)}</div>
-      <div class="s">brut ${eur(M.brut)} · SS ${eur(M.ss)} · IRPF ${eur(M.irpf)}</div></div>
+      <div class="s">${netReal(y,m) != null
+        ? "real " + eur(netReal(y,m)) + " · diferència " + (PRIVAT ? "•••" : sgnEur(netReal(y,m) - M.net))
+        : "brut " + eur(M.brut) + " · SS " + eur(M.ss) + " · IRPF " + eur(M.irpf)}</div></div>
     <div class="kpi"><div class="k">Exempt art. 7.p (€)</div><div class="v">${eur(M.exempt)}</div>
       <div class="s">${M.diesIntl} de ${M.diesComp} dies computables (${fmt(M.propIntl*100)} %)</div></div>
-    <div class="kpi"><div class="k">Hores extres</div><div class="v">${fmt(M.extraTot)}</div>
-      <div class="s">${fmt(M.extraNacH+M.extraIntH)} pagades · ${fmt(M.generat)} h a la bossa</div></div>
+    <div class="kpi"><div class="k">Hores extres fetes</div><div class="v">${fmt(M.extraTot)}</div>
+      <div class="s">${M.extraFetesH ? fmt(M.extraFetesH) + " es cobren " + quanEsCobra(y, m, +P.retardExtres||0) : "cap per cobrar"}${
+        M.generat ? " · " + fmt(M.generat) + " h a la bossa" : ""}</div></div>
   </div>
   <div class="card"><div class="card-t">A · Meritació bruta</div><table>
     ${li("Salari de la paga mensual" + (M.factor < 1 ? ` (${M.diesAlta}/${fmt0(M.divisor)} dies)` : ""), eur(M.salari))}
     ${M.pagaExtra ? li("Paga extra" + (M.propAlta < 1 ? ` (${fmt(M.propAlta*100)} % de l'any)` : ""), eur(M.pagaExtra)) : ""}
-    ${li("H. extres pagades — dies nacionals", eur(M.extraNac))}
-    ${li("H. extres pagades — dies internacionals", eur(M.extraInt))}
-    ${li("Dietes nacionals", eur(M.dietaNac))}
-    ${li("Dietes internacionals", eur(M.dietaInt))}
+    ${li("H. extres" + deFont(M.fontExtres, y, m) + " — dies nacionals" + (M.extraNacH ? ` (${fmt(M.extraNacH)} h)` : ""), eur(M.extraNac))}
+    ${li("H. extres" + deFont(M.fontExtres, y, m) + " — dies internacionals" + (M.extraIntH ? ` (${fmt(M.extraIntH)} h)` : ""), eur(M.extraInt))}
+    ${li("Dietes nacionals" + deFont(M.fontDietes, y, m), eur(M.dietaNac))}
+    ${li("Dietes internacionals" + deFont(M.fontDietes, y, m), eur(M.dietaInt))}
     <tfoot><tr><td style="text-align:left">TOTAL BRUT</td><td>${eur(M.brut)}</td></tr></tfoot></table>
     <div class="note">Hora ordinària ${eur(hOrd)} €/h · hora extra ${eur(hOrd*(1+P.incrExtra))} €/h${
       M.factor < 1 ? ` · <b>mes d'alta parcial:</b> ${M.diesAlta} dies d'alta sobre un divisor de ${fmt0(M.divisor)}, així que el salari, la base de cotització i el topall van prorratejats.` : ""}</div></div>
@@ -1397,6 +1439,7 @@ function viewNom(){
       ${M.tipus === 0 ? `<b style="color:var(--red)">Surt 0 % perquè encara no arriba al mínim exclòs de retenir
         (${eur((LIMITS[P.situacio]||LIMITS[3])[Math.min(+P.descend||0,2)])} €).</b> Amb pocs mesos entrats el net queda inflat:
         registra la resta de mesos, o posa el tipus a mà des dels paràmetres.` : ""}</div>` : ""}</div>
+  ${blocNetReal(y,m,M)}
   <div class="card"><div class="card-t">E · Bossa d'hores de descans</div><table>
     ${li("Generades aquest mes", fmt(M.generat)+" h")}
     ${li("equivalents a jornades", fmt(M.jornades), "dim", 1)}
@@ -1414,7 +1457,34 @@ function viewNom(){
     ${li("IRPF", eur(anual.irpf), "neg")}
     <tfoot><tr><td style="text-align:left">NET ACUMULAT</td><td>${eur(anual.net)}</td></tr></tfoot></table>
     ${anual.exempt > P.art7pLimit ? '<div class="note"><b style="color:var(--red)">Límit de l\'art. 7.p superat.</b> L\'excés per damunt de '+eur(P.art7pLimit)+' € tributa.</div>' : ""}
-    <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div></div>`;
+    <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div></div>
+  ${blocRealAny(y, anual)}`;
+}
+/** Estimat contra real, mes a mes. Una diferència aïllada és un mes estrany;
+    la mateixa cada mes és un paràmetre mal posat, i això només es veu en fila. */
+function blocRealAny(y, A){
+  const ms = A.mesos.map((M,m) => ({m, M, R: netReal(y,m)})).filter(o => o.M.teDades || o.R != null);
+  if(!ms.some(o => o.R != null)) return "";
+  let tE = 0, tR = 0;
+  const files = ms.map(({m,M,R}) => {
+    const est = M.teDades ? M.net : 0, dif = R != null ? r2(R - est) : null;
+    if(R != null){ tE += est; tR += R; }
+    return `<tr><td>${MSHORT[m]}</td><td>${M.teDades ? eur(est) : "—"}</td>
+      <td>${R != null ? eur(R) : "—"}</td>
+      <td class="${dif == null || Math.abs(dif) < 0.01 ? "dim" : dif > 0 ? "pos" : "neg"}">${
+        dif == null ? "—" : PRIVAT ? "•••" : sgnEur(dif).replace(" €","")}</td></tr>`;
+  }).join("");
+  const d = r2(tR - tE);
+  return `
+  <div class="card"><div class="card-t">Net real vs estimat — ${y}</div>
+    <table>
+      <thead><tr><th>Mes</th><th>Estimat</th><th>Real</th><th>Diferència</th></tr></thead>
+      <tbody>${files}</tbody>
+      <tfoot><tr><td>Cobrat</td><td>${eur(r2(tE))}</td><td>${eur(r2(tR))}</td>
+        <td class="${Math.abs(d) < 0.01 ? "dim" : d > 0 ? "pos" : "neg"}">${PRIVAT ? "•••" : sgnEur(d).replace(" €","")}</td></tr></tfoot>
+    </table>
+    <div class="note">Els totals només sumen els mesos que tenen net real, perquè comparin el mateix.</div>
+  </div>`;
 }
 /** Preu de l'hora real: tot el que cobres partit per tot el temps que hi poses.
     Al numerador hi va el brut sencer —salari, pagues extres, hores extres
@@ -1427,7 +1497,9 @@ function viewNom(){
     dotze de despeses no voldria dir res: els costos fixos de l'autònom es
     prorrategen als mateixos mesos. */
 function preuHora(y){
-  const P = yr(y).pay, A = payYear(y);
+  /* sense retard: les extres de novembre són de novembre encara que es cobrin
+     al gener, i el que es mesura és què et paguen per cada hora que fas */
+  const P = yr(y).pay, A = payYear(y, true);
   let fix = 0, extres = 0, dietes = 0, m1 = -1, m2 = -1;
   let hTot = 0, hOrd = 0, hExt = 0, hTreb = 0, hViatge = 0, hDesp = 0, diesTreb = 0;
   A.mesos.forEach((M,m) => {
@@ -1538,6 +1610,48 @@ function blocPreuHora(y){
     <div class="chips" style="margin-top:10px"><button class="btn sm" id="payCfg">Paràmetres de nòmina</button></div>
   </div>`;
 }
+const sgnEur = n => (n > 0.004 ? "+" : n < -0.004 ? "−" : "") + eur(Math.abs(n)) + " €";
+/** " de juliol" si la part variable ve d'un altre mes; res si és del mateix. */
+function deFont(F, y, m){
+  if(!F || (F.y === y && F.m === m)) return "";
+  return " " + deMes(F.m) + (F.y !== y ? " " + F.y : "");
+}
+/** "a la nòmina de novembre", o de l'any que toqui. */
+function quanEsCobra(y, m, lag){
+  if(!lag) return "aquest mes";
+  let yy = y, mm = m + lag;
+  while(mm > 11){ mm -= 12; yy++; }
+  return "a la nòmina " + deMes(mm) + (yy !== y ? " " + yy : "");
+}
+/** Net real: el que t'ha entrat al banc. S'hi escriu quan cobres, i es compara
+    amb l'estimació d'aquell mateix mes, que ja porta les extres de fa N mesos. */
+function blocNetReal(y, m, M){
+  const R = netReal(y, m), P = yr(y).pay;
+  const dif = (R != null && M) ? r2(R - M.net) : null;
+  const hoy = new Date();
+  const passat = y < hoy.getFullYear() || (y === hoy.getFullYear() && m <= hoy.getMonth());
+  const tipus = PRIVAT ? "password" : "number";
+  return `
+  <div class="card"><div class="card-t">Net real — ingrés al banc</div>
+    <div class="row2">
+      <input class="fld" id="nrIn" type="${tipus}" step="0.01" min="0" inputmode="decimal"
+        placeholder="${passat ? "el que t'ha entrat" : "quan cobris"}" value="${R != null ? R : ""}">
+      <button class="btn sm pri" id="nrOk" style="height:40px">${R != null ? "Actualitza" : "Desa"}</button>
+    </div>
+    ${M ? `<table style="margin-top:10px">
+      <tr><td style="text-align:left">Net estimat</td><td>${eur(M.net)} €</td></tr>
+      ${R != null ? `<tr><td style="text-align:left">Net real</td><td>${eur(R)} €</td></tr>
+      <tfoot><tr><td style="text-align:left">DIFERÈNCIA</td>
+        <td class="${Math.abs(dif) < 0.01 ? "dim" : dif > 0 ? "pos" : "neg"}">${PRIVAT ? "•••" : sgnEur(dif)}</td></tr></tfoot>` : ""}
+    </table>` : ""}
+    <div class="note">${M ? `L'estimació d'aquest mes és el que t'hauria d'entrar ara: el salari ${deMes(m)}${
+        +P.retardExtres ? `, i les hores extres${deFont(M.fontExtres, y, m)}, que es cobren amb ${+P.retardExtres} ${+P.retardExtres === 1 ? "mes" : "mesos"} de retard` : ""}${
+        +P.retardDietes ? `, i les dietes${deFont(M.fontDietes, y, m)}` : ""}. Les extres que fas aquest mes no hi són: surten ${quanEsCobra(y, m, +P.retardExtres||0)}.` : "Aquest mes no té estimació, però el que cobris ho pots anotar igualment."}
+      ${R != null && Math.abs(dif) >= 1 ? `<br>Si la diferència es repeteix cada mes, sol ser un paràmetre: el tipus d'IRPF, les dietes que es cobren amb retard (ara ${+P.retardDietes||0} mesos) o una paga extra prorratejada.` : ""}
+      ${R != null && !passat ? `<br><b style="color:var(--gold)">Aquest mes encara no s'ha acabat.</b>` : ""}</div>
+    ${R != null ? `<div class="chips" style="margin-top:8px"><button class="btn sm" id="nrDel">Esborra el net real</button></div>` : ""}
+  </div>`;
+}
 function nomNav(y,m){
   return `<div class="mnav">
     <button id="nPrev">‹</button>
@@ -1548,19 +1662,26 @@ function wireNom(){
   if($("nPrev")) $("nPrev").onclick = () => { MONTH--; if(MONTH<0){MONTH=11; YEAR--; syncYearSel();} render(); };
   if($("nNext")) $("nNext").onclick = () => { MONTH++; if(MONTH>11){MONTH=0; YEAR++; syncYearSel();} render(); };
   if($("payCfg")) $("payCfg").onclick = openPay;
+  if($("nrOk")) $("nrOk").onclick = () => {
+    const v = $("nrIn").value.trim().replace(",", ".");
+    if(v !== "" && !(+v >= 0)) return;
+    setNetReal(YEAR, MONTH, v === "" ? null : +v); render();
+  };
+  if($("nrIn")) $("nrIn").onkeydown = e => { if(e.key === "Enter") $("nrOk").click(); };
+  if($("nrDel")) $("nrDel").onclick = () => { setNetReal(YEAR, MONTH, null); render(); };
 }
 /** Totals de l'any i bossa d'hores amb imputació FIFO i caducitat. */
-function payYear(y){
-  const P = yr(y).pay, ms = [];
-  for(let m=0;m<12;m++) ms.push(payMonth(y,m));
+function payYear(y, sensRetard){
+  const ms = [];
+  for(let m=0;m<12;m++) ms.push(payMonth(y,m,false,sensRetard));
   const A = {brut:0, exempt:0, subjecte:0, ss:0, irpf:0, net:0,
              saldo:Array(12).fill(0), caducat:Array(12).fill(0), mesos:ms};
   /* només compten els mesos amb dies registrats: si no, cada mes buit hi sumaria
      igualment el salari fix i el total anual sortiria inflat */
-  ms.forEach(M => { if(!M.dies.length) return;
+  ms.forEach(M => { if(!M.teDades) return;
                     A.brut+=M.brut; A.exempt+=M.exempt; A.subjecte+=M.subjecte;
                     A.ss+=M.ss; A.irpf+=M.irpf; A.net+=M.net; });
-  A.mesosAmbDades = ms.filter(M => M.dies.length).length;
+  A.mesosAmbDades = ms.filter(M => M.teDades).length;
   ["brut","exempt","subjecte","ss","irpf","net"].forEach(k => A[k] = r2(A[k]));
   const B = bossa(y);
   A.saldo = B.saldo; A.caducat = B.caducat;
@@ -2184,6 +2305,8 @@ function openCfg(){
 const PAYFIELDS = [
   ["Salari i jornada", [["salari","Salari brut anual (€)",1],["pagues","Nº pagues",1],["horesAny","Hores anuals conveni",1],
      ["diesMesProrrata","Divisor del mes (30 estàndard · 0 = dies reals)",.0001]]],
+  ["Quan es cobra", [["retardExtres","Hores extres: mesos de retard",1],
+     ["retardDietes","Dietes: mesos de retard",1]]],
   ["Dietes nacionals (€)", [["esmorzar","Esmorzar",.01],["dinar","Dinar",.01],["sopar","Sopar",.01],
      ["pernocta","Compl. pernocta",.01],["capSetmana","Compl. cap de setmana/festiu",.01],["kmEur","€ per km",.01]]],
   ["Dietes internacionals (€)", [["intlLab","Dia laborable",.01],["intlFest","Dia cap de setmana/festiu",.01]]],
@@ -2512,22 +2635,30 @@ function mergeDB(a, b){
   const years = new Set([...Object.keys(a.years||{}), ...Object.keys(b.years||{})]);
   years.forEach(y => {
     const ay = (a.years||{})[y] || {}, by = (b.years||{})[y] || {};
-    const days = {}, keys = [...new Set([...Object.keys(ay.days||{}), ...Object.keys(by.days||{})])].sort();
-    keys.forEach(k => {
-      const ar = (ay.days||{})[k], br = (by.days||{})[k];
-      if(!ar || !br){ days[k] = ar || br; return; }
-      /* amb la mateixa marca de temps desempatem pel contingut, perquè els dos
-         dispositius arribin al mateix resultat i no s'estiguin trepitjant */
-      days[k] = (ar.t||0) !== (br.t||0) ? ((ar.t||0) > (br.t||0) ? ar : br)
-              : (JSON.stringify(ar) <= JSON.stringify(br) ? ar : br);
-    });
+    /* clau a clau, guanya la marca de temps més alta; amb la mateixa marca
+       desempatem pel contingut, perquè els dos dispositius arribin al mateix
+       resultat i no s'estiguin trepitjant */
+    const perClaus = (A, B) => {
+      const r = {};
+      [...new Set([...Object.keys(A||{}), ...Object.keys(B||{})])].sort().forEach(k => {
+        const ar = (A||{})[k], br = (B||{})[k];
+        if(!ar || !br){ r[k] = ar || br; return; }
+        r[k] = (ar.t||0) !== (br.t||0) ? ((ar.t||0) > (br.t||0) ? ar : br)
+             : (JSON.stringify(ar) <= JSON.stringify(br) ? ar : br);
+      });
+      return r;
+    };
+    const days = perClaus(ay.days, by.days);
+    /* el net real va mes a mes pel mateix motiu: posar el d'octubre al mòbil no
+       ha d'esborrar el de setembre que vas posar a l'ordinador */
+    const netReal = perClaus(ay.netReal, by.netReal);
     /* Els ajustos i els paràmetres de nòmina van junts amb la mateixa marca de
        temps. `pay` s'ha de fusionar SEMPRE: deixar-se'l feia que cada
        sincronització et tornés el salari, les dates de contracte, les dietes i
        el mode d'IRPF als valors per defecte. */
     const newerA = (ay.cfgT||0) >= (by.cfgT||0);
     const tria = k => (newerA ? ay[k] : by[k]) || ay[k] || by[k] || {};
-    out.years[y] = {days, cfgT: Math.max(ay.cfgT||0, by.cfgT||0),
+    out.years[y] = {days, netReal, cfgT: Math.max(ay.cfgT||0, by.cfgT||0),
                     cfg: Object.assign(DEFCFG(), tria("cfg")),
                     pay: Object.assign(DEFPAY(), tria("pay"))};
   });

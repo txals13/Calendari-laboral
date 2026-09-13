@@ -66,6 +66,24 @@ El **registre de jornada** exportable (PDF i .xlsx) porta una columna **Bossa**
 amb +0,50 el dilluns i −0,50 el divendres, i una nota que explica que un dia amb
 menys hores i un − a la bossa és una jornada completa compensada.
 
+**Quan es cobra.** Les hores extres no es cobren el mes que es fan: surten a la
+nòmina **dos mesos després** (paràmetre *Hores extres: mesos de retard*). Les del
+setembre, a la nòmina de novembre; les de novembre, a la de gener de l'any
+següent. Per això l'estimació de cada mes és el que t'hauria d'entrar al banc
+**aquell** mes —el salari del mes més les extres de fa dos mesos—, i la
+meritació diu de quin mes són («H. extres de setembre»). Les dietes tenen el seu
+propi retard, per defecte 0: si també arriben tard, canvia'l.
+
+El **preu de l'hora** del Resum no fa servir el retard: mesura què et paguen per
+les hores que fas, així que les extres de novembre hi compten al novembre.
+
+**Net real.** Sota el bloc D de cada mes hi ha un camp per escriure el que t'ha
+entrat al banc. Surt la diferència amb l'estimació, també al KPI de dalt, i al
+final de la pestanya hi ha la taula de l'any mes a mes. Una diferència aïllada
+és un mes estrany; la mateixa cada mes sol ser un paràmetre (tipus d'IRPF,
+dietes que es cobren amb retard). El net real es sincronitza mes a mes entre
+dispositius, com els dies.
+
 **Mesos d'alta parcial.** El període de contracte es posa als paràmetres (inici i,
 si escau, fi). El mes en què entres o surts no cobra sencer: el salari, la base de
 cotització i el topall van prorratejats, i les pagues extres pels dies d'alta de
