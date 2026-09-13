@@ -16,6 +16,28 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
 - **⚙️** — bossa de vacances, romanent de l'any anterior, lliure disposició,
   objectiu manual, i exportació/importació de dades.
 
+## Desfer i refer
+
+El botó **↶** de la cinta de dalt (o **Ctrl+Z** fora d'un camp de text) desfà
+l'última acció, i es pot prémer fins a 50 cops seguits. **↷** (o **Ctrl+Y**, o
+**Ctrl+Maj+Z**) torna a fer el que acabes de desfer. Si hi passes per sobre,
+diuen què faran, i en prémer-los avisen a baix: «Desfet: 31 dies», «Refet:
+ajustos», «Desfet: net real de setembre».
+
+Si després de desfer fas un canvi nou, el que havies desfet ja no es pot refer:
+com a qualsevol editor, el canvi nou obre un altre camí.
+
+- **Una acció és un pas**, encara que toqui molts dies: aplicar un estat a tot un
+  mes o a una selecció de divendres es desfà d'un sol cop.
+- Es desfà el que fas tu, **no el que arriba d'un altre dispositiu**. Si mentre
+  tant el mòbil ha sincronitzat un dia, desfer el teu canvi de l'ordinador no el
+  toca.
+- **El que desfàs també es sincronitza.** El valor restaurat porta una marca de
+  temps nova, i un dia que no existia abans queda esborrat amb làpida: així
+  l'altre dispositiu no el torna a posar.
+- També desfà una importació de JSON i el «esborra l'any».
+- Les dues llistes viuen en memòria: en tancar o recarregar l'app, es buiden.
+
 ## Nòmina
 
 Port del simulador `2026_Nomina_Prodec_v3.xlsx`. Tots els paràmetres són a

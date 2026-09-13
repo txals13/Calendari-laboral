@@ -55,7 +55,17 @@ button{cursor:pointer}
 .logo{font-family:monospace;font-weight:700;color:var(--gold);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;letter-spacing:.3px}
 .topbar select{background:var(--bg2);border:1px solid var(--br2);border-radius:7px;padding:5px 7px;font-size:13px;font-family:monospace}
 .topbar button{background:var(--bg2);border:1px solid var(--br2);border-radius:7px;padding:5px 8px;font-size:15px}
+.topbar button:disabled{opacity:.35;cursor:default}
+#btnUndo,#btnRedo{font-weight:700;min-width:34px}
+/* amb desfer i refer, al mòbil els botons s'estrenyen una mica per no menjar-se el logotip */
+@media(max-width:420px){.topbar button{padding:5px 6px}#btnUndo,#btnRedo{min-width:30px}}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:var(--bg2);color:var(--tx);
+  border:1px solid var(--br2);border-radius:10px;padding:9px 14px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.35);
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:60;max-width:calc(100% - 32px)}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(max-width:640px){.topbar{gap:4px;padding:0 6px}.topbar .logo{font-size:11px}}
+/* amb el botó de desfer no hi cap sencer: millor una paraula que mitja */
+@media(max-width:420px){.logo2{display:none}}
 /* tabs */
 .tabs{display:flex;background:var(--bg1);border-bottom:1px solid var(--br);flex-shrink:0}
 .tab{flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:9px 4px;font-size:12.5px;color:var(--tx2);font-weight:600}
@@ -210,8 +220,10 @@ td.dim{color:var(--tx3)}
 <body>
 <div id="app">
   <div class="topbar">
-    <span class="logo">CALENDARI LABORAL</span>
+    <span class="logo">CALENDARI<span class="logo2"> LABORAL</span></span>
     <select id="yearSel" title="Any"></select>
+    <button id="btnUndo" title="Desfés (Ctrl+Z)" disabled>↶</button>
+    <button id="btnRedo" title="Refés (Ctrl+Y)" disabled>↷</button>
     <button id="btnSync" title="Sincronització">○</button>
     <button id="btnPriv" title="Amaga els imports">👁</button>
     <button id="btnTheme" title="Tema">🌙</button>
@@ -228,6 +240,7 @@ td.dim{color:var(--tx3)}
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" inert></div>
 <div id="tip"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <div id="print"></div>
 
 <script>
@@ -399,8 +412,122 @@ function avisaDesat(e){
   alert("No s'han pogut desar les dades: "+((e && e.message) || e));
 }
 function save(){
+  registraPas();
   persist();
   schedulePush();
+}
+
+/* ───────────────────────── Desfer ─────────────────────────
+   Cada acció que desa és un pas, i tot el que canvia dins la mateixa tasca va
+   junt: aplicar un estat a trenta dies són trenta setRec, i es desfan d'un cop.
+   No es guarda una còpia sencera del DB sinó què hi havia ABANS de cada clau
+   tocada —un dia, el net real d'un mes, els ajustos de l'any—. Així desfer no
+   s'endú el que hagi arribat d'un altre dispositiu entremig. I el que es
+   restaura porta una marca de temps nova: si no, la sincronització trobaria
+   més nova la versió desfeta i la tornaria a posar. */
+const DESFER = [], REFER = [], MAX_DESFER = 50;
+let BASE = null, pasObert = false;
+const copia = o => o === undefined ? undefined : JSON.parse(JSON.stringify(o));
+/** El DB tal com està ara és el punt de partida del pas següent. */
+function foto(){ BASE = copia(DB); }
+function registraPas(){
+  if(pasObert || !BASE) return;
+  pasObert = true;
+  setTimeout(tancaPas, 0);
+}
+function tancaPas(){
+  if(!pasObert) return;
+  pasObert = false;
+  const canvis = [];
+  const ys = new Set([...Object.keys(BASE.years||{}), ...Object.keys(DB.years||{})]);
+  ys.forEach(y => {
+    const a = (BASE.years||{})[y] || {}, b = (DB.years||{})[y] || {};
+    ["days","netReal"].forEach(t => {
+      new Set([...Object.keys(a[t]||{}), ...Object.keys(b[t]||{})]).forEach(k => {
+        const va = (a[t]||{})[k];
+        if(JSON.stringify(va) !== JSON.stringify((b[t]||{})[k])) canvis.push({y, t, k, abans: va === undefined ? null : va});
+      });
+    });
+    /* amb els valors per defecte omplerts: que yr() completi una clau nova no
+       és cap canvi teu */
+    const norm = o => JSON.stringify([Object.assign(DEFCFG(), o.cfg||{}), Object.assign(DEFPAY(), o.pay||{})]);
+    if(norm(a) !== norm(b)) canvis.push({y, t:"cfg", abans:{cfg:copia(a.cfg), pay:copia(a.pay)}});
+  });
+  foto();
+  if(!canvis.length) return;
+  DESFER.push(canvis);
+  if(DESFER.length > MAX_DESFER) DESFER.shift();
+  /* una acció nova després de desfer obre una altra branca: el que havies
+     desfet ja no es pot refer, com a qualsevol editor */
+  REFER.length = 0;
+  pintaDesfer();
+}
+function descriuPas(canvis){
+  const dies = canvis.filter(c => c.t === "days"), nets = canvis.filter(c => c.t === "netReal");
+  const parts = [];
+  if(dies.length === 1){
+    const [yy,mm,dd] = dies[0].k.split("-").map(Number);
+    parts.push(WDAYS[wday(yy,mm-1,dd)] + " " + dd + " " + deMes(mm-1));
+  } else if(dies.length) parts.push(dies.length + " dies");
+  if(nets.length) parts.push("net real " + nets.map(c => deMes(+c.k)).join(", "));
+  if(canvis.some(c => c.t === "cfg")) parts.push("ajustos");
+  return parts.join(" · ");
+}
+/** Aplica una llista de canvis i en torna la inversa —el que hi havia just
+    abans d'aplicar-la—. Desfer i refer són la mateixa operació: desfer aplica
+    l'«abans» d'un pas i guarda l'«ara» per refer-lo, i refer, al revés. */
+function aplicaCanvis(canvis){
+  const ara = Date.now(), inversa = [];
+  /* posar-hi el contingut SENSE canviar l'objecte: hi ha codi que en guarda la referència */
+  const posa = (dst, src) => { Object.keys(dst).forEach(k => delete dst[k]); Object.assign(dst, copia(src) || {}); };
+  canvis.forEach(c => {
+    const o = yr(c.y);
+    if(c.t === "cfg"){
+      inversa.push({y:c.y, t:"cfg", abans:{cfg:copia(o.cfg), pay:copia(o.pay)}});
+      posa(o.cfg, c.abans.cfg); posa(o.pay, c.abans.pay);
+      o.cfgT = ara; yr(c.y);
+      return;
+    }
+    const dic = o[c.t];
+    inversa.push({y:c.y, t:c.t, k:c.k, abans: dic[c.k] === undefined ? null : copia(dic[c.k])});
+    /* no hi era: una làpida, perquè l'altre dispositiu també l'esborri */
+    if(c.abans === null){ if(dic[c.k]) dic[c.k] = {del:1, t:ara}; }
+    else dic[c.k] = Object.assign({}, c.abans, {t:ara});
+  });
+  /* no és un pas nou: es desa sense passar per save() */
+  persist(); schedulePush(); foto();
+  if($("sheet").classList.contains("on")) closeSheet();
+  syncYearSel(); render(); pintaDesfer();
+  return inversa;
+}
+function desfer(){
+  tancaPas();                          /* si hi ha un pas a mig fer, que hi entri */
+  const canvis = DESFER.pop();
+  if(!canvis) return;
+  REFER.push(aplicaCanvis(canvis));
+  pintaDesfer();
+  avisa("Desfet: " + (descriuPas(canvis) || "l'últim canvi"));
+}
+function refer(){
+  tancaPas();
+  const canvis = REFER.pop();
+  if(!canvis) return;
+  DESFER.push(aplicaCanvis(canvis));
+  pintaDesfer();
+  avisa("Refet: " + (descriuPas(canvis) || "l'últim canvi"));
+}
+function pintaDesfer(){
+  const b = $("btnUndo"), r = $("btnRedo"); if(!b || !r) return;
+  const n = DESFER.length, m = REFER.length;
+  b.disabled = !n;
+  b.title = n ? "Desfés: " + descriuPas(DESFER[n-1]) + " (Ctrl+Z)" : "No hi ha res per desfer";
+  r.disabled = !m;
+  r.title = m ? "Refés: " + descriuPas(REFER[m-1]) + " (Ctrl+Y)" : "No hi ha res per refer";
+}
+let avisT = 0;
+function avisa(txt){
+  const t = $("toast"); t.textContent = txt; t.classList.add("on");
+  clearTimeout(avisT); avisT = setTimeout(() => t.classList.remove("on"), 2600);
 }
 function yr(y){
   y = String(y);
@@ -2811,7 +2938,10 @@ async function sync(interactive){
       else if(r.status === 404) fileId = null;
       else { syncErr = "Error llegint de Drive ("+r.status+")."; setSyncUI(); return; }
     }
-    if(remote && remote.years) DB = mergeDB(DB, remote);
+    /* el que arriba d'un altre dispositiu no és cap pas teu per desfer: es
+       tanca el que hi hagi obert i la fusió passa a ser el punt de partida */
+    tancaPas();
+    if(remote && remote.years){ DB = mergeDB(DB, remote); foto(); }
     /* Desem el resultat de la fusió abans de pujar-lo: si la pujada falla o
        tanques l'app a mitges, el que has baixat ja és aquí. */
     await persist();
@@ -2916,11 +3046,22 @@ async function init(){
   $("btnTheme").onclick = () => { setTheme(!document.documentElement.classList.contains("light")); render(); };
   $("btnCfg").onclick   = openCfg;
   $("btnSync").onclick  = () => sync(true);
+  $("btnUndo").onclick  = desfer;
+  $("btnRedo").onclick  = refer;
   $("btnPriv").onclick  = () => { setPrivat(!PRIVAT); render(); if($("sheet").classList.contains("on")) closeSheet(); };
   $("scrim").onclick    = closeSheet;
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => { VIEW = t.dataset.v; render(); });
-  document.addEventListener("keydown", e => { if(e.key === "Escape") closeSheet(); });
+  document.addEventListener("keydown", e => {
+    if(e.key === "Escape") closeSheet();
+    /* dins d'un camp, Ctrl+Z desfà el que escrius, com sempre */
+    if(!(e.ctrlKey || e.metaKey) || e.target.closest("input,textarea,select,[contenteditable]")) return;
+    const k = e.key.toLowerCase();
+    if(k === "z" && !e.shiftKey){ e.preventDefault(); desfer(); }
+    /* Ctrl+Y a Windows, Cmd+Shift+Z a Mac: acceptem tots dos */
+    else if(k === "y" || (k === "z" && e.shiftKey)){ e.preventDefault(); refer(); }
+  });
   render();
+  foto(); pintaDesfer();
 
   /* Carreguem Google d'entrada perquè, quan cliquis, requestAccessToken es cridi
      dins del mateix gest i el navegador no bloquegi la finestra. */
