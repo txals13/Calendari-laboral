@@ -52,9 +52,19 @@ antigues— i caducitat a final del mes N + 2: les fetes el setembre valen fins 
 30 de novembre. El saldo es veu al xip «bossa» del calendari (a final de mes) i
 al Resum (avui, amb les primeres que caduquen).
 
+Al **Resum**, les **hores extres** que tornes en descans es descompten del mes en
+què les vas fer: amb el dilluns i el divendres de l'exemple, l'indicador passa de
+0,50 a 0,00 i diu «fetes 0,50 · −0,50 tornades en descans». Una hora de bossa no
+sempre és una hora d'extra: les d'un dissabte entren ×1,5, així que tornar-ne 1,5 h
+en descompta 1. Les extres pagades segueixen comptant. L'indicador de la bossa
+dóna el saldo d'avui i, si has planificat dies més endavant, on et deixen.
+
 El **saldo** d'hores no canvia pel fet de fer servir la bossa: la mitja hora de
-més del dilluns i la de menys del divendres ja s'hi compensen soles. La bossa és
-el registre formal de quines hores es poden tornar en temps.
+més del dilluns i la de menys del divendres ja s'hi compensen soles.
+
+El **registre de jornada** exportable (PDF i .xlsx) porta una columna **Bossa**
+amb +0,50 el dilluns i −0,50 el divendres, i una nota que explica que un dia amb
+menys hores i un − a la bossa és una jornada completa compensada.
 
 **Mesos d'alta parcial.** El període de contracte es posa als paràmetres (inici i,
 si escau, fi). El mes en què entres o surts no cobra sencer: el salari, la base de

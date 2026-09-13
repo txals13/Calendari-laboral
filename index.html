@@ -549,6 +549,15 @@ function stats(y){
     M.saldo  = M.done - M.target;
     S.months.push(M);
   }
+  /* Les extres que tornes en descans deixen de ser extres pendents —l'art. 35.2
+     de l'ET ni tan sols les compta si es compensen dins dels quatre mesos—, així
+     que el Resum les descompta. Les pagades segueixen sent extres. */
+  S.bossa = bossa(y);
+  S.months.forEach((M,i) => { M.comp = S.bossa.compensades[i]; M.extraNet = Math.max(0, r2(M.extra - M.comp)); });
+  S.compensades = r2(S.bossa.compensades.reduce((a,h) => a + h, 0));
+  S.extraFetes = r2(S.extra);
+  S.extra = Math.max(0, r2(S.extra - S.compensades));
+  S.extraYTD = Math.max(0, r2(S.extraYTD - S.bossa.compYTD));
   S.autoTarget = S.theoTot - S.vacH - S.ldH;
   S.target     = (o.cfg.target != null && o.cfg.target !== "") ? +o.cfg.target : S.autoTarget;
   S.saldo      = S.done - S.target;
@@ -954,7 +963,7 @@ function render(){
 function viewCal(){
   const y = YEAR, m = MONTH, S = stats(y), M = S.months[m];
   const first = wday(y,m,1), n = mlen(y,m), today = new Date();
-  const P = yr(y).pay, B = bossa(y);
+  const P = yr(y).pay, B = S.bossa;
   let cells = "", pos = 0, fila = 0;
   /* cada fila comença amb la setmana ISO; en mode selecció, és el botó que
      marca la setmana sencera */
@@ -1116,17 +1125,22 @@ function viewSum(){
   const rows = S.months.map((M,i) => `<tr>
       <td>${MSHORT[i]}</td><td>${fmt(M.target)}</td>
       <td>${M.done?fmt(M.done):"—"}</td>
-      <td class="${M.extra>0?"pos":"dim"}">${M.extra?fmt(M.extra):"—"}</td>
+      <td class="${M.extraNet>0?"pos":"dim"}"${M.comp?` title="fetes ${fmt(M.extra)} · tornades en descans ${fmt(M.comp)}"`:""}>${
+        M.extra ? fmt(M.extraNet) + (M.comp ? `<small class="dim"> (−${fmt(M.comp)})</small>` : "") : "—"}</td>
       <td class="${M.done||M.vac||M.ld?(M.saldo>=0?"pos":"neg"):"dim"}">${M.done||M.vac||M.ld?sgn(M.saldo):"—"}</td>
       <td class="dim">${M.days||"—"}</td></tr>`).join("");
   return `
   <div class="kpis" style="margin-bottom:10px">
-    ${kpi("Hores extres (h)", fmt(S.extra), "comptades dia a dia · "+fmt(S.extraYTD)+" fins avui", S.extra>0?"pos":"", true)}
+    ${kpi("Hores extres (h)", fmt(S.extra),
+          S.compensades
+            ? "fetes " + fmt(S.extraFetes) + " · −" + fmt(S.compensades) + " tornades en descans"
+            : "comptades dia a dia · " + fmt(S.extraYTD) + " fins avui",
+          S.extra>0?"pos":"", true)}
     ${kpi("Saldo de l'any (h)", sgn(S.saldo), "fetes "+fmt(S.done)+" · objectiu "+fmt(S.target), S.saldo>=0?"pos":"neg")}
     ${kpi("Saldo fins avui (h)", sgn(S.saldoYTD), "objectiu a data d'avui "+fmt(S.targetYTD), S.saldoYTD>=0?"pos":"neg")}
     ${kpi("Vacances restants (h)", fmt(S.vacLeft), "de "+fmt((+S.cfg.vacH||0)+(+S.cfg.carry||0))+" h · "+S.days.VAC+" dies marcats", S.vacLeft<0?"neg":"")}
     ${kpi("Lliure disposició (h)", fmt(S.ldLeft), "de "+fmt(+S.cfg.ldH||0)+" h", S.ldLeft<0?"neg":"")}
-    ${kpiBossa(y, kpi)}
+    ${kpiBossa(y, kpi, S.bossa)}
   </div>
   <div class="card">
     <div class="card-t">Hores per mes</div>
@@ -1165,22 +1179,25 @@ function viewSum(){
       <span class="chip">festius treballats <b>${S.festiusTreballats}</b></span>
     </div>
     <div class="note">Teòriques de l'any segons calendari: <b>${fmt(S.theoTot)} h</b>. L'objectiu descompta les hores dels dies marcats com a vacances o lliure disposició${S.cfg.target!=null&&S.cfg.target!==""?" (ara sobreescrit manualment a "+fmt(+S.cfg.target)+" h)":""}.
+      <br><b>Les extres que tornes en descans es descompten</b> del mes en què les vas fer, tant si les gastes amb un dia sencer de descans com amb unes hores de la bossa: ja no són hores pendents. Les pagades segueixen comptant.
       <br><b>Extres i saldo no són el mateix.</b> Les extres es compten dia a dia i no es compensen: 2 h de més un dia i 1 h de menys un altre són 2 h extres. El saldo sí que les compensa, i serveix per saber si vas avançat o endarrerit${S.curt?", que aquí van "+fmt(S.curt)+" h per sota de la jornada":""}.</div>
   </div>
   ${blocPreuHora(y)}`;
 }
 
 /** La bossa d'hores tal com està avui, i quines són les primeres a caducar. */
-function kpiBossa(y, kpi){
-  const B = bossa(y);
+function kpiBossa(y, kpi, B = bossa(y)){
   const C = B.properaCaducitat;
   const quan = C ? new Date(y, C.mes + 1, 0) : null;      /* darrer dia d'aquell mes */
   const descobert = r2(Object.values(B.descobert).reduce((a,h) => a + h, 0));
+  /* avui és el que tens de debò; si has planificat dies més endavant, que es
+     vegi també on et deixen, que si no l'indicador no es mou fins que arriben */
+  const futur = B.planificat != null ? " · " + fmt(B.planificat) + " h amb el planificat" : "";
   return kpi("Bossa de descans (h)", fmt(B.avui),
     descobert ? fmt(descobert) + " h gastades sense tenir-ne"
-    : C ? fmt(C.h) + " h caduquen el " + quan.getDate() + " " + deMes(quan.getMonth())
+    : (C ? fmt(C.h) + " h caduquen el " + quan.getDate() + " " + deMes(quan.getMonth())
         + (quan.getFullYear() !== y ? " de " + quan.getFullYear() : "")
-      : "sense hores pendents",
+      : "avui") + futur,
     descobert ? "neg" : "");
 }
 
@@ -1560,19 +1577,29 @@ function payYear(y){
 function bossa(y){
   const P = yr(y).pay, cad = +P.mesosCaducitat || 0;
   const hoy = new Date(), avuiK = iso(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  const lots = [];                        /* {mes, h} pendents */
+  /* {mes, h, f}: hores pendents i el factor amb què es van generar (×1,5 en
+     cap de setmana), per saber quantes hores EXTRES torna cada hora gastada */
+  const lots = [];
   const viu = () => r2(lots.reduce((a,L) => a + L.h, 0));
   const B = {saldo:Array(12).fill(0), caducat:Array(12).fill(0),
-             abans:{}, descobert:{}, avui:0, properaCaducitat:null};
+             /* hores extres tornades en descans, al mes en què es van FER: així
+                la mitja hora del dilluns surt descomptada al seu propi mes */
+             compensades:Array(12).fill(0), compYTD:0,
+             abans:{}, descobert:{}, avui:0, properaCaducitat:null,
+             planificat:null};             /* saldo després de l'últim moviment futur */
   for(let m=0;m<12;m++){
     for(let d=1; d<=mlen(y,m); d++){
       const k = iso(y,m,d), x = payDay(y,m,d,P);
       B.abans[k] = viu();                 /* el que tenies en començar el dia */
       if(x){
         let cal = x.gaudit;
-        for(const L of lots){ if(cal <= 0) break; const u = Math.min(L.h, cal); L.h = r2(L.h - u); cal = r2(cal - u); }
+        for(const L of lots){ if(cal <= 0) break;
+          const u = Math.min(L.h, cal); L.h = r2(L.h - u); cal = r2(cal - u);
+          B.compensades[L.mes] += u / L.f;
+          if(k <= avuiK) B.compYTD += u / L.f; }
         if(cal > 0) B.descobert[k] = cal; /* gastat sense tenir-ne */
-        if(x.generat > 0) lots.push({mes:m, h:x.generat});
+        if(x.generat > 0) lots.push({mes:m, h:x.generat, f: x.extra > 0 ? x.generat / x.extra : 1});
+        if(k > avuiK && (x.gaudit || x.generat)) B.planificat = viu();
       }
       if(k === avuiK){
         B.avui = viu();
@@ -1588,6 +1615,7 @@ function bossa(y){
   }
   /* un any que ja ha passat es queda amb el saldo final; un de futur, a zero */
   if(y < hoy.getFullYear()) B.avui = B.saldo[11];
+  B.compensades = B.compensades.map(r2); B.compYTD = r2(B.compYTD);
   return B;
 }
 
@@ -2308,7 +2336,7 @@ function dlBlob(name, blob){
    Full de registre de jornada per presentar a l'empresa: un dia per fila, amb
    el fitxatge, l'estat i les hores extres, i els totals. */
 const COLS_INFORME = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
-                      "Pausa (h)","Hores fetes","Previstes","Extres","Nota"];
+                      "Pausa (h)","Hores fetes","Previstes","Extres","Bossa (h)","Nota"];
 const MESOS_TOT = -1;
 function periodeText(y, mDe, mA){
   return mDe === mA ? `${MONTHS[mDe]} de ${y}`
@@ -2319,10 +2347,12 @@ function periodeText(y, mDe, mA){
 function imprimeixInforme(y, mDe, mA){
   const {files, totals} = filesInforme(y, mDe, mA);
   const c = yr(y).cfg;
-  const num = new Set([7,8,9,10]);   /* columnes numèriques, alineades a la dreta */
+  const num = new Set([7,8,9,10,11]);   /* columnes numèriques, alineades a la dreta */
+  const BOSSA = 11;                     /* amb signe: + hi entra, − en surt */
   const cap = COLS_INFORME.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
   const cos = files.map(f => "<tr>" + f.map((v,i) =>
-      `<td${num.has(i)?' class="r"':""}>${typeof v === "number" ? (v ? fmt(v) : "") : esc(v)}</td>`).join("") + "</tr>").join("");
+      `<td${num.has(i)?' class="r"':""}>${typeof v === "number"
+        ? (v ? (i === BOSSA ? sgn(v) : fmt(v)) : "") : esc(v)}</td>`).join("") + "</tr>").join("");
   const doc = document.getElementById("print");
   doc.innerHTML = `
     <h1>Registre de jornada</h1>
@@ -2339,6 +2369,8 @@ function imprimeixInforme(y, mDe, mA){
         <td class="r"><b>${fmt(totals.hores)}</b></td>
         <td class="r">${fmt(totals.previstes)}</td>
         <td class="r"><b>${fmt(totals.extres)}</b></td>
+        <td class="r">${totals.bossaEntra || totals.bossaSurt
+          ? "+" + fmt(totals.bossaEntra) + " / −" + fmt(totals.bossaSurt) : ""}</td>
         <td></td>
       </tr></tfoot>
     </table>
@@ -2346,6 +2378,10 @@ function imprimeixInforme(y, mDe, mA){
       <p>Les <b>hores extres</b> es compten dia a dia: són les hores fetes per damunt de
          les previstes de cada jornada, i no es compensen amb els dies que se'n fan menys.
          Les hores previstes surten del calendari laboral signat.</p>
+      ${totals.bossaEntra || totals.bossaSurt ? `<p>La columna <b>Bossa</b> és la bossa d'hores de descans: amb <b>+</b>,
+         hores extres que no es cobren i queden per tornar en temps (×${fmt(yr(y).pay.factCdS)} en cap de setmana o festiu);
+         amb <b>−</b>, hores de la bossa gaudides aquell dia. Un dia amb menys hores que les previstes i un
+         <b>−</b> a la bossa és una jornada completa, compensada amb temps acumulat abans.</p>` : ""}
       <div class="signa">
         <div><span></span>Treballador/a</div>
         <div><span></span>Empresa</div>
@@ -2442,14 +2478,14 @@ function exportaXlsx(y, mDe, mA){
   const {files, totals} = filesInforme(y, mDe, mA);
   const dades = [COLS_INFORME, ...files, [],
     ["Totals", "", "", "", "", "", "", "", totals.hores, totals.previstes, totals.extres,
-     totals.dies + " dies amb hores"]];
-  const amples = [11,6,17,12,11,9,9,9,11,10,9,30];
+     r2(totals.bossaEntra - totals.bossaSurt), totals.dies + " dies amb hores"]];
+  const amples = [11,6,17,12,11,9,9,9,11,10,9,10,30];
   const nom = "registre-jornada-" + y + (mDe === mA ? "-" + pad(mDe+1) : "") + ".xlsx";
   dlBlob(nom, xlsx(dades, amples, periodeText(y, mDe, mA).slice(0,31)));
 }
 function filesInforme(y, mDe, mA){
   const P = yr(y).pay, files = [];
-  let tH = 0, tP = 0, tE = 0, tDies = 0;
+  let tH = 0, tP = 0, tE = 0, tDies = 0, tBe = 0, tBs = 0;
   for(let m = mDe; m <= mA; m++) for(let d = 1; d <= mlen(y,m); d++){
     const r = rec(y,m,d); if(!r) continue;
     const x = calcDia(y,m,d,r,P); if(!x) continue;
@@ -2458,11 +2494,13 @@ function filesInforme(y, mDe, mA){
       iso(y,m,d), WDAYS[wday(y,m,d)], TYPES[t].l,
       r.s ? STATES[r.s].l : "", r.d || "",
       r.i || "", r.f || "", +r.p || 0,
-      x.h, x.prev, x.extra, r.n || ""
+      x.h, x.prev, x.extra, r2(x.generat - x.gaudit), r.n || ""
     ]);
     tH += x.h; tP += x.prev; tE += x.extra; if(x.h > 0) tDies++;
+    tBe += x.generat; tBs += x.gaudit;
   }
-  return {files, totals:{hores:r2(tH), previstes:r2(tP), extres:r2(tE), dies:tDies}};
+  return {files, totals:{hores:r2(tH), previstes:r2(tP), extres:r2(tE), dies:tDies,
+                         bossaEntra:r2(tBe), bossaSurt:r2(tBs)}};
 }
 
 /* ───────────────────────── Google Drive ─────────────────────────
