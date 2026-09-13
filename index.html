@@ -132,6 +132,9 @@ button{cursor:pointer}
 .sw{width:11px;height:11px;border-radius:3px;border:1px solid var(--br2);flex-shrink:0}
 /* chips row */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+/* interruptors del filtre dels informes: encès = hi entra */
+.tg{background:var(--bg0);border:1px solid var(--br2);border-radius:16px;padding:4px 10px;font-size:12px;color:var(--tx3);text-decoration:line-through}
+.tg.on{border-color:var(--gold);color:var(--goldtx);background:var(--goldbg);text-decoration:none}
 .chip{background:var(--bg0);border:1px solid var(--br);border-radius:20px;padding:4px 11px;font-size:11.5px;color:var(--tx2);font-family:monospace;white-space:nowrap}
 .chip b{color:var(--tx1);font-weight:700}
 .chip.pos b{color:var(--green)}.chip.neg b{color:var(--red)}
@@ -221,6 +224,7 @@ td.dim{color:var(--tx3)}
   #print .signa div{flex:1;font-size:8.5pt}
   #print .signa span{display:block;border-bottom:0.6pt solid #000;height:14mm}
   #print .petit{font-size:7.5pt;color:#444}
+  #print .filtre{font-size:8.5pt;margin:-2mm 0 4mm;padding:1.5mm 2.5mm;background:#f4f4f4;border-left:2pt solid #000}
   /* A4: sense dir-ho, Chrome fa servir la mida de l'impressora, que pot ser Letter */
   @page{size:A4 portrait;margin:12mm 9mm}
 }
@@ -1192,6 +1196,7 @@ function viewCal(){
   <div class="calwrap${PICKING?" picking":""}">
     ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia marcat":"dies marcats"}
       <button class="btn sm pri" id="selEdit">Edita'ls</button>
+      <button class="btn sm" id="selInf" style="margin-left:0">Informe</button>
       <button class="btn sm" id="selClear" style="margin-left:0">Desmarca</button></div>` : ""}
     <div class="wk"><div title="Setmana">st</div>${WDAYS.map((w,i) =>
       PICKING ? `<button class="selhead" data-col="${i}">${w}</button>` : `<div>${w}</div>`).join("")}</div>
@@ -1212,6 +1217,11 @@ function wireCal(){
     if(!PICKING) openDay(+el.dataset.d);
   });
   if($("selClear")) $("selClear").onclick = () => { SELDIES.clear(); render(); };
+  /* un informe exactament dels dies que has marcat */
+  if($("selInf")) $("selInf").onclick = () => {
+    const ks = [...SELDIES].sort();
+    openInforme(null, Object.assign(filtreBuit(ks[0], ks[ks.length-1]), {marcats:true}));
+  };
   /* Sortir del mode NO desmarca: si ho fes, marcar una columna i sortir per
      poder obrir un dia et deixaria sense selecció, que és justament el que
      volies aplicar. Per netejar hi ha el botó «Desmarca». */
@@ -1435,12 +1445,9 @@ function viewTrv(){
     <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). Només hi compten els dies amb estat <b>Estranger</b> o <b>Nacional</b>: un dia a la seu no és un dia fora, encara que hi posis un codi. <b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius. <b>Treballats</b> són els que tenen hores.</div>
     <div class="chips" style="margin-top:10px">
-      <button class="btn sm" id="viaPdfMes">Informe del mes (PDF)</button>
-      <button class="btn sm" id="viaPdfAny">Informe de l'any (PDF)</button>
-      <button class="btn sm" id="viaXlsMes">Excel del mes</button>
-      <button class="btn sm" id="viaXlsAny">Excel de l'any</button>
+      <button class="btn sm pri" id="viaInf">Fes un informe de viatges…</button>
     </div>
-    <div class="note">Un dia per fila amb el fitxatge, la destinació, les hores de viatge, de desplaçament i de treball al client, i la dieta, més el resum per destinació. Els imports hi surten encara que tinguis els diners amagats.</div>
+    <div class="note">PDF o Excel del període que vulguis, i filtrant per destinació, dies de la setmana o estat.</div>
   </div>
   <div class="card">
     <div class="card-t">Estades</div>
@@ -1451,10 +1458,7 @@ function viewTrv(){
 
 function wireTrv(){
   const y = YEAR;
-  if($("viaPdfMes")) $("viaPdfMes").onclick = () => imprimeixViatges(y, MONTH, MONTH);
-  if($("viaPdfAny")) $("viaPdfAny").onclick = () => imprimeixViatges(y, 0, 11);
-  if($("viaXlsMes")) $("viaXlsMes").onclick = () => exportaViatgesXlsx(y, MONTH, MONTH);
-  if($("viaXlsAny")) $("viaXlsAny").onclick = () => exportaViatgesXlsx(y, 0, 11);
+  if($("viaInf")) $("viaInf").onclick = () => openInforme("viatges");
 }
 
 /** Utilització del tècnic. El denominador és la capacitat ORDINÀRIA del conveni
@@ -2366,18 +2370,9 @@ function openCfg(){
       : signedIn  ? "Connectat. Els canvis pugen sols un parell de segons després de fer-los, i en obrir l'app es baixa el que hagis fet en un altre dispositiu."
       : "Sense connectar, les dades només viuen en aquest navegador."
       }${syncErr ? " <b style=\"color:var(--red)\">"+esc(syncErr)+"</b>" : ""}</div>
-    <div class="lbl">Informe de jornada per a l'empresa</div>
-    <div class="row2">
-      <div><input class="fld" id="cNom" maxlength="60" value="${esc(c.nom||"")}" placeholder="El teu nom"><div class="note">nom</div></div>
-      <div><input class="fld" id="cEmp" maxlength="60" value="${esc(c.empresa||"")}" placeholder="Empresa"><div class="note">empresa</div></div>
-    </div>
-    <div class="chips" style="margin-top:8px">
-      <button class="btn sm" id="infPdfMes">Informe del mes (PDF)</button>
-      <button class="btn sm" id="infPdfAny">Informe de l'any (PDF)</button>
-      <button class="btn sm" id="infXlsMes">Excel del mes</button>
-      <button class="btn sm" id="infXlsAny">Excel de l'any</button>
-    </div>
-    <div class="note">Un dia per fila amb el fitxatge, l'estat, les hores fetes, les previstes i les extres, més els totals i espai per a signatures. El PDF surt del diàleg d'impressió: tria «Desa com a PDF».</div>
+    <div class="lbl">Informes per a l'empresa</div>
+    <div class="chips"><button class="btn sm pri" id="cInf">Fes un informe…</button></div>
+    <div class="note">Registre de jornada o de viatges, en PDF o Excel, del període que vulguis i filtrant per dies de la setmana, estat o destinació.</div>
     <div class="lbl">Dades</div>
     <div class="chips">
       <button class="btn sm" id="exJson">Exporta còpia (JSON)</button>
@@ -2393,17 +2388,11 @@ function openCfg(){
     o.vacH = +$("cVac").value || 0; o.carry = +$("cCar").value || 0;
     o.ldH  = +$("cLd").value  || 0;
     const t = $("cTgt").value.trim(); o.target = t === "" ? null : +t;
-    o.nom = $("cNom").value.trim(); o.empresa = $("cEmp").value.trim();
     yr(y).cfgT = Date.now();
     save(); closeSheet(); render();
   };
   /* el nom i l'empresa surten a la capçalera de l'informe: els desem abans */
-  const desaCap = () => { const o = yr(y).cfg;
-    o.nom = $("cNom").value.trim(); o.empresa = $("cEmp").value.trim(); yr(y).cfgT = Date.now(); save(); };
-  $("infPdfMes").onclick = () => { desaCap(); closeSheet(); imprimeixInforme(y, MONTH, MONTH); };
-  $("infPdfAny").onclick = () => { desaCap(); closeSheet(); imprimeixInforme(y, 0, 11); };
-  $("infXlsMes").onclick = () => { desaCap(); exportaXlsx(y, MONTH, MONTH); };
-  $("infXlsAny").onclick = () => { desaCap(); exportaXlsx(y, 0, 11); };
+  $("cInf").onclick = () => openInforme("jornada");
   if($("signIn"))  $("signIn").onclick  = async () => { closeSheet(); await sync(true); openCfg(); };
   if($("syncNow")) $("syncNow").onclick = async () => { closeSheet(); await sync(true); openCfg(); };
   if($("signOut")) $("signOut").onclick = () => {
@@ -2604,21 +2593,216 @@ const MESOS_TOT = -1;
 const esFora = r => !!r && (r.s === "EST" || r.s === "NAC");
 /* sense codi també és un dia fora; va a «—», igual a la pantalla i als informes */
 const clauDest = r => (r.d || "—").toUpperCase();
+/* ── Filtre dels informes ──
+   Un informe és un conjunt de dies: un període de dates i, dins seu, els dies
+   de la setmana, els estats i les destinacions que hi vulguis. Tot es guarda
+   com a EXCLUSIONS, perquè una destinació nova que aparegui hi entri sola. */
+const filtreBuit = (de, a) => ({de, a, noDia:[], noEstat:[], noDest:[], marcats:false});
+/** mesos sencers d'un any, amb el filtre per defecte */
+const filtreMes = (y, mDe, mA) => filtreBuit(iso(y,mDe,1), iso(y,mA,mlen(y,mA)));
+const partDia = k => { const [y,m,d] = k.split("-").map(Number); return {y, m:m-1, d}; };
+/** Els dies registrats del període que passen el filtre, en ordre. Amb
+    `senseDest` no es mira la destinació: serveix per saber quines n'hi ha. */
+function diesInforme(F, viatges, senseDest){
+  const out = [];
+  if(!F.de || !F.a || F.de > F.a) return out;
+  const A = partDia(F.de), B = partDia(F.a), fi = new Date(B.y, B.m, B.d);
+  for(const dt = new Date(A.y, A.m, A.d); dt <= fi; dt.setDate(dt.getDate() + 1)){
+    const y = dt.getFullYear(), m = dt.getMonth(), d = dt.getDate();
+    if(!DB.years[String(y)]) continue;          /* no crear anys buits només per mirar-los */
+    const r = rec(y,m,d);
+    if(!r || (viatges && !esFora(r))) continue;
+    if(F.noDia.includes(wday(y,m,d))) continue;
+    if(F.noEstat.includes(r.s || "")) continue;
+    if(!senseDest && F.noDest.includes(clauDest(r))) continue;
+    if(F.marcats && !SELDIES.has(iso(y,m,d))) continue;
+    out.push({y, m, d, r});
+  }
+  return out;
+}
+/** «Setembre de 2026», «Any 2026», «Agost – Desembre de 2026» o dates soltes. */
+function textPeriode(F){
+  const A = partDia(F.de), B = partDia(F.a);
+  if(A.d === 1 && B.d === mlen(B.y, B.m)){
+    if(A.y === B.y && A.m === 0 && B.m === 11) return `Any ${A.y}`;
+    if(A.y === B.y && A.m === B.m) return `${MONTHS[A.m]} de ${A.y}`;
+    if(A.y === B.y) return `${MONTHS[A.m]} – ${MONTHS[B.m]} de ${A.y}`;
+    return `${MONTHS[A.m]} de ${A.y} – ${MONTHS[B.m]} de ${B.y}`;
+  }
+  const f = X => pad(X.d) + "/" + pad(X.m+1) + "/" + X.y;
+  return F.de === F.a ? f(A) : f(A) + " – " + f(B);
+}
+const estatsDe = viatges => viatges ? ["EST","NAC"] : [...Object.keys(STATES), ""];
+const nomEstat = k => k ? STATES[k].l : "Sense estat";
+const nomDest  = k => k === "—" ? "Sense destinació" : k;
+/** Les destinacions que hi ha al període, per poder-les triar. */
+const destsDe = (F, viatges) => [...new Set(diesInforme(F, viatges, true).map(o => clauDest(o.r)))]
+  .sort((a,b) => a === "—" ? 1 : b === "—" ? -1 : a.localeCompare(b));
+/** Què deixa fora el filtre, dit en positiu. Va a la capçalera de l'informe:
+    un document per a l'empresa ha de dir que no els inclou tots. */
+function textFiltre(F, viatges){
+  const parts = [];
+  if(F.marcats) parts.push("només els dies marcats al calendari");
+  if(F.noDia.length) parts.push(WDAYS.filter((w,i) => !F.noDia.includes(i)).join(", "));
+  const est = estatsDe(viatges);
+  if(est.some(k => F.noEstat.includes(k))) parts.push(est.filter(k => !F.noEstat.includes(k)).map(nomEstat).join(", "));
+  const ds = destsDe(F, viatges);
+  if(ds.some(k => F.noDest.includes(k))) parts.push("destinació " + ds.filter(k => !F.noDest.includes(k)).map(nomDest).join(", "));
+  return parts.join(" · ");
+}
+/** Nom de fitxer a partir del període. */
+function nomInforme(pre, F, ext){
+  const A = partDia(F.de), B = partDia(F.a), t = textPeriode(F);
+  const cos = t.startsWith("Any ") ? String(A.y)
+            : A.d === 1 && B.d === mlen(B.y,B.m) && A.y === B.y && A.m === B.m ? A.y + "-" + pad(A.m+1)
+            : F.de + "_" + F.a;
+  return pre + "-" + cos + (textFiltre(F, pre === "viatges") ? "-filtrat" : "") + "." + ext;
+}
+/* un full d'Excel no admet / \ ? * [ ] : al nom */
+const nomFull = F => textPeriode(F).replace(/[\\/?*\[\]:]/g, "-").slice(0,31);
 /** Un informe sense cap fila no s'imprimeix: un PDF amb la taula buida sembla
     que l'app hagi perdut les dades, quan el que passa és que no n'hi ha cap
     que hi encaixi. */
-function senseDies(y, mDe, mA, viatges){
-  const quan = periodeText(y, mDe, mA);
-  alert(viatges
-    ? `No hi ha cap dia fora en el període triat (${quan}).
-
-L'informe de viatges només recull els dies amb estat «Estranger» o «Nacional». Un dia a la seu no hi entra, encara que tingui un codi de destinació.`
-    : `No hi ha cap dia registrat en el període triat (${quan}).`);
+function senseDies(F, viatges){
+  const quan = textPeriode(F), filtre = textFiltre(F, viatges);
+  alert((viatges ? `No hi ha cap dia fora en el període triat (${quan}).`
+                 : `No hi ha cap dia registrat en el període triat (${quan}).`)
+    + (filtre ? `\n\nAmb el filtre: ${filtre}.` : "")
+    + (viatges ? `\n\nL'informe de viatges només recull els dies amb estat «Estranger» o «Nacional». Un dia a la seu no hi entra, encara que tingui un codi de destinació.` : ""));
 }
-function periodeText(y, mDe, mA){
-  return mDe === mA ? `${MONTHS[mDe]} de ${y}`
-       : mDe === 0 && mA === 11 ? `Any ${y}`
-       : `${MONTHS[mDe]} – ${MONTHS[mA]} de ${y}`;
+/** Nom, empresa, període i, si n'hi ha, el filtre: la capçalera dels dos informes. */
+function capInforme(F, viatges){
+  const c = cfgInforme(F), filtre = textFiltre(F, viatges);
+  return `
+    <div class="sub">
+      <div><b>${esc(c.nom || "")}</b>${c.empresa ? " · " + esc(c.empresa) : ""}</div>
+      <div>${esc(textPeriode(F))}</div>
+    </div>
+    ${filtre ? `<div class="filtre">Inclou: ${esc(filtre)}</div>` : ""}`;
+}
+/** L'any d'on surten el nom i l'empresa, sense crear-ne cap de buit per mirar-lo. */
+const cfgInforme = F => { const y = F && F.de ? partDia(F.de).y : YEAR;
+                          return (DB.years[String(y)] ? yr(y) : yr(YEAR)).cfg; };
+
+/* ── Compositor d'informes ──
+   Una sola fitxa per als dos informes: tries el tipus, el període i què hi
+   entra, i a sota veus en directe quants dies en surten. El filtre es recorda
+   mentre l'app és oberta. */
+let FILTRE = null, TIPUS_INF = "jornada";
+function openInforme(tipus, F){
+  if(tipus) TIPUS_INF = tipus;
+  if(F) FILTRE = F;
+  if(!FILTRE){ const h = new Date(); FILTRE = filtreMes(h.getFullYear(), h.getMonth(), h.getMonth()); }
+  pintaInforme();
+}
+function pintaInforme(){
+  const F = FILTRE, via = TIPUS_INF === "viatges", c = cfgInforme(F);
+  const sh = $("sheet"), scroll = sh.classList.contains("on") ? sh.scrollTop : 0;
+  const dies = diesInforme(F, via);
+  const hores = r2(dies.reduce((a,o) => a + horesDia(o.r), 0));
+  const est = estatsDe(via), ds = destsDe(F, via), filtre = textFiltre(F, via), nSel = SELDIES.size;
+  const tg = (on, attrs, txt) => `<button class="tg${on ? " on" : ""}" ${attrs}>${txt}</button>`;
+  const motiu = !F.de || !F.a ? "Tria les dues dates del període."
+              : F.de > F.a ? "La data d'inici és posterior a la de final."
+              : !dies.length ? (via ? "Cap dia fora (Estranger o Nacional) passa el filtre." : "Cap dia registrat passa el filtre.")
+              : "";
+  openSheet(`<div id="infForm">
+    <div class="sh-hdr"><div class="sh-t">Informe</div><button class="btn sm" id="shX">✕</button></div>
+    <div class="stbtns" id="fTipus" style="grid-template-columns:1fr 1fr">
+      <button class="stb${!via ? " on" : ""}" data-t="jornada">Registre de jornada<small>les hores de cada dia</small></button>
+      <button class="stb${via ? " on" : ""}" data-t="viatges">Viatges<small>dies fora i dietes</small></button>
+    </div>
+    <div class="lbl">Període</div>
+    <div class="row2">
+      <div><input class="fld" id="fDe" type="date" value="${F.de || ""}"><div class="note">des de</div></div>
+      <div><input class="fld" id="fA" type="date" value="${F.a || ""}"><div class="note">fins a</div></div>
+    </div>
+    <div class="chips" id="fPer" style="margin-top:6px">
+      <button class="btn sm" data-p="mes">Aquest mes</button>
+      <button class="btn sm" data-p="ant">‹ Mes anterior</button>
+      <button class="btn sm" data-p="seg">Mes següent ›</button>
+      <button class="btn sm" data-p="any">Tot l'any</button>
+      <button class="btn sm" data-p="alta">Des de l'alta</button>
+    </div>
+    ${nSel || F.marcats ? `<div class="chips" style="margin-top:8px">${
+      tg(F.marcats, 'id="fMarc"', `Només els ${nSel} ${nSel === 1 ? "dia marcat" : "dies marcats"} al calendari`)}</div>` : ""}
+    <div class="lbl">Dies de la setmana</div>
+    <div class="chips" id="fDia">${WDAYS.map((w,i) => tg(!F.noDia.includes(i), `data-i="${i}"`, w)).join("")}
+      <button class="btn sm" data-q="lab">dl–dv</button><button class="btn sm" data-q="tots">tots</button></div>
+    <div class="lbl">Estat del dia</div>
+    <div class="chips" id="fEst">${est.map(k => tg(!F.noEstat.includes(k), `data-k="${k}"`, esc(nomEstat(k)))).join("")}</div>
+    <div class="lbl">Destinació</div>
+    <div class="chips" id="fDest">${ds.length
+      ? ds.map(k => tg(!F.noDest.includes(k), `data-k="${esc(k)}"`, esc(nomDest(k)))).join("")
+        + (ds.length > 1 ? `<button class="btn sm" data-q="totes">totes</button><button class="btn sm" data-q="cap">cap</button>` : "")
+      : `<span class="note" style="margin:0">Cap destinació en aquest període.</span>`}</div>
+    <div class="lbl">A nom de</div>
+    <div class="row2">
+      <input class="fld" id="fNom" maxlength="60" value="${esc(c.nom || "")}" placeholder="El teu nom">
+      <input class="fld" id="fEmp" maxlength="60" value="${esc(c.empresa || "")}" placeholder="Empresa">
+    </div>
+    <div class="card" style="margin:12px 0 0;padding:10px 12px">
+      <div style="font-size:15px"><b>${dies.length}</b> ${dies.length === 1 ? "dia" : "dies"} · <b>${fmt(hores)}</b> h</div>
+      <div class="note" style="margin-top:4px">${motiu ? `<b style="color:var(--gold)">${esc(motiu)}</b>`
+        : filtre ? "L'informe dirà a la capçalera que <b>inclou: " + esc(filtre) + "</b>."
+        : "Tots els dies registrats del període" + (via ? " amb estat Estranger o Nacional." : ".")}</div>
+    </div>
+    <div class="note">${via
+      ? "Un dia per fila amb el fitxatge, la destinació, les hores de viatge, de desplaçament i de treball al client, i la dieta, més el resum per destinació. Els imports hi surten encara que tinguis els diners amagats."
+      : "Un dia per fila amb el fitxatge, l'estat, les hores fetes, les previstes, les extres i la bossa, més els totals i espai per a signatures."}
+      El PDF surt del diàleg d'impressió: tria «Desa com a PDF».</div>
+    <div class="acts">
+      <button class="btn" id="fXls"${dies.length ? "" : " disabled"}>Excel</button>
+      <button class="btn pri" id="fPdf"${dies.length ? "" : " disabled"}>PDF</button>
+    </div></div>`);
+  sh.scrollTop = scroll;
+
+  const torna = () => pintaInforme();
+  const commuta = (arr, v) => { const i = arr.indexOf(v); if(i < 0) arr.push(v); else arr.splice(i, 1); };
+  $("shX").onclick = closeSheet;
+  $("fTipus").querySelectorAll(".stb").forEach(b => b.onclick = () => { TIPUS_INF = b.dataset.t; torna(); });
+  ["fDe","fA"].forEach(id => { obreCalendari($(id));
+    $(id).onchange = () => { F.de = $("fDe").value; F.a = $("fA").value; torna(); }; });
+  $("fPer").querySelectorAll("[data-p]").forEach(b => b.onclick = () => {
+    const h = new Date(), A = F.de ? partDia(F.de) : {y:h.getFullYear(), m:h.getMonth()};
+    const mes = (y, m) => { while(m < 0){ m += 12; y--; } while(m > 11){ m -= 12; y++; }
+                            F.de = iso(y,m,1); F.a = iso(y,m,mlen(y,m)); };
+    const k = b.dataset.p;
+    if(k === "mes") mes(h.getFullYear(), h.getMonth());
+    if(k === "ant") mes(A.y, A.m - 1);
+    if(k === "seg") mes(A.y, A.m + 1);
+    if(k === "any"){ F.de = iso(A.y,0,1); F.a = iso(A.y,11,31); }
+    if(k === "alta"){
+      const P = (DB.years[String(A.y)] ? yr(A.y) : yr(YEAR)).pay, avui = iso(h.getFullYear(), h.getMonth(), h.getDate());
+      F.de = P.contracteIni || iso(A.y,0,1);
+      F.a = avui >= F.de ? avui : iso(partDia(F.de).y,11,31);
+    }
+    F.marcats = false; torna();
+  });
+  if($("fMarc")) $("fMarc").onclick = () => {
+    F.marcats = !F.marcats;
+    /* en marcar-ho, el període s'ajusta als dies marcats: si no, n'hi podrien
+       quedar fora sense que te n'adonessis */
+    if(F.marcats && nSel){ const ks = [...SELDIES].sort(); F.de = ks[0]; F.a = ks[ks.length-1]; }
+    torna();
+  };
+  $("fDia").querySelectorAll(".tg").forEach(b => b.onclick = () => { commuta(F.noDia, +b.dataset.i); torna(); });
+  $("fDia").querySelectorAll("[data-q]").forEach(b => b.onclick = () => {
+    F.noDia = b.dataset.q === "lab" ? [5,6] : []; torna(); });
+  $("fEst").querySelectorAll(".tg").forEach(b => b.onclick = () => { commuta(F.noEstat, b.dataset.k); torna(); });
+  $("fDest").querySelectorAll(".tg").forEach(b => b.onclick = () => { commuta(F.noDest, b.dataset.k); torna(); });
+  $("fDest").querySelectorAll("[data-q]").forEach(b => b.onclick = () => {
+    F.noDest = b.dataset.q === "cap" ? ds.slice() : []; torna(); });
+  /* el nom i l'empresa van a la capçalera: es desen abans de fer l'informe */
+  const desaCap = () => {
+    const o = cfgInforme(F), nom = $("fNom").value.trim(), emp = $("fEmp").value.trim();
+    if(nom === (o.nom || "") && emp === (o.empresa || "")) return;
+    o.nom = nom; o.empresa = emp;
+    yr(DB.years[String(partDia(F.de).y)] ? partDia(F.de).y : YEAR).cfgT = Date.now();
+    save();
+  };
+  $("fPdf").onclick = () => { desaCap(); closeSheet(); via ? imprimeixViatges(F) : imprimeixInforme(F); };
+  $("fXls").onclick = () => { desaCap(); via ? exportaViatgesXlsx(F) : exportaXlsx(F); };
 }
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF". */
 /* Al PDF, noms de jornada curts: amb els llargs («Intensiva d'estiu») la columna
@@ -2627,10 +2811,10 @@ const JORN_CURTA = {P:"Partida", V:"Divendres", I:"Intensiva", C:"Curta", F:"Fes
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF".
     Cada dia és UNA línia; la nota, si n'hi ha, va a sota ocupant tota l'amplada,
     que en una columna estreta al final es partia en mil trossos. */
-function imprimeixInforme(y, mDe, mA){
-  const {files, totals} = filesInforme(y, mDe, mA);
-  if(!files.length) return senseDies(y, mDe, mA, false);
-  const c = yr(y).cfg;
+function imprimeixInforme(F){
+  const {files, totals} = filesInforme(F);
+  if(!files.length) return senseDies(F, false);
+  const y = partDia(F.de).y;
   /* les mateixes columnes que el full de càlcul, menys la nota; les unitats van
      al peu, i així les capçaleres no obliguen a eixamplar les columnes */
   const COLS = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
@@ -2653,10 +2837,7 @@ function imprimeixInforme(y, mDe, mA){
   const doc = document.getElementById("print");
   doc.innerHTML = `
     <h1>Registre de jornada</h1>
-    <div class="sub">
-      <div><b>${esc(c.nom || "")}</b>${c.empresa ? " · " + esc(c.empresa) : ""}</div>
-      <div>${esc(periodeText(y, mDe, mA))}</div>
-    </div>
+    ${capInforme(F, false)}
     <table class="jornada">
       <thead><tr>${cap}</tr></thead>
       ${cos}
@@ -2695,13 +2876,12 @@ function imprimeixInforme(y, mDe, mA){
    un document amb punts no serveix per presentar enlloc. */
 const eurRaw = n => (Math.round(n*100)/100).toLocaleString("ca-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
 const COLS_VIATGES = ["Data","Dia","Estat","Destinació","Fitxatge","Hores","Viatge","Desplaçament","Client","Dieta (€)"];
-function filesViatges(y, mDe, mA){
-  const P = yr(y).pay, files = [];
+function filesViatges(F){
+  const files = [];
   const T = {hores:0, viatge:0, desp:0, client:0, dieta:0, dies:0, treballats:0};
   const dest = {};
-  for(let m = mDe; m <= mA; m++) for(let d = 1; d <= mlen(y,m); d++){
-    const r = rec(y,m,d); if(!esFora(r)) continue;
-    const x = calcDia(y,m,d,r,P); if(!x) continue;
+  for(const {y,m,d,r} of diesInforme(F, true)){
+    const x = calcDia(y,m,d,r,yr(y).pay); if(!x) continue;
     const fitx = [r.vi, r.i, r.f, r.vf].filter(Boolean);
     files.push([
       iso(y,m,d), WDAYS[wday(y,m,d)], STATES[r.s].l, r.d || "",
@@ -2720,10 +2900,9 @@ function filesViatges(y, mDe, mA){
   Object.values(dest).forEach(o => { o.hores = r2(o.hores); o.dieta = r2(o.dieta); });
   return {files, T, dest};
 }
-function imprimeixViatges(y, mDe, mA){
-  const {files, T, dest} = filesViatges(y, mDe, mA);
-  if(!files.length) return senseDies(y, mDe, mA, true);
-  const c = yr(y).cfg;
+function imprimeixViatges(F){
+  const {files, T, dest} = filesViatges(F);
+  if(!files.length) return senseDies(F, true);
   const num = new Set([5,6,7,8,9]);
   const cap = COLS_VIATGES.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
   const cos = files.map(f => "<tr>" + f.map((v,i) =>
@@ -2734,10 +2913,7 @@ function imprimeixViatges(y, mDe, mA){
       <td class="r">${eurRaw(dest[k].dieta)}</td></tr>`).join("");
   document.getElementById("print").innerHTML = `
     <h1>Desplaçaments i viatges</h1>
-    <div class="sub">
-      <div><b>${esc(c.nom || "")}</b>${c.empresa ? " · " + esc(c.empresa) : ""}</div>
-      <div>${esc(periodeText(y, mDe, mA))}</div>
-    </div>
+    ${capInforme(F, true)}
     <table><thead><tr>${cap}</tr></thead><tbody>${cos}</tbody>
       <tfoot><tr>
         <td colspan="5"><b>Totals</b> — ${T.dies} dies fora, ${T.treballats} amb hores</td>
@@ -2760,35 +2936,34 @@ function imprimeixViatges(y, mDe, mA){
   window.addEventListener("afterprint", neteja);
   setTimeout(() => window.print(), 60);
 }
-function exportaViatgesXlsx(y, mDe, mA){
-  const {files, T, dest} = filesViatges(y, mDe, mA);
-  if(!files.length) return senseDies(y, mDe, mA, true);
+function exportaViatgesXlsx(F){
+  const {files, T, dest} = filesViatges(F);
+  if(!files.length) return senseDies(F, true);
   const dades = [COLS_VIATGES, ...files, [],
     ["Totals","","","","", T.hores, T.viatge, T.desp, T.client, T.dieta],
     [], ["Resum per destinació"], ["Destinació","Dies fora","Treballats","Hores","Dietes (€)"]];
   Object.keys(dest).sort((a,b) => dest[b].dies - dest[a].dies)
     .forEach(k => dades.push([k, dest[k].dies, dest[k].treballats, dest[k].hores, dest[k].dieta]));
+  if(textFiltre(F, true)) dades.push([], ["Filtre", textFiltre(F, true)]);
   const amples = [11,6,12,11,14,9,9,13,9,11];
-  const nom = "viatges-" + y + (mDe === mA ? "-" + pad(mDe+1) : "") + ".xlsx";
-  dlBlob(nom, xlsx(dades, amples, periodeText(y, mDe, mA).slice(0,31)));
+  dlBlob(nomInforme("viatges", F, "xlsx"), xlsx(dades, amples, nomFull(F)));
 }
 
-function exportaXlsx(y, mDe, mA){
-  const {files, totals} = filesInforme(y, mDe, mA);
-  if(!files.length) return senseDies(y, mDe, mA, false);
+function exportaXlsx(F){
+  const {files, totals} = filesInforme(F);
+  if(!files.length) return senseDies(F, false);
   const dades = [COLS_INFORME, ...files, [],
     ["Totals", "", "", "", "", "", "", "", totals.hores, totals.previstes, totals.extres,
      r2(totals.bossaEntra - totals.bossaSurt), totals.dies + " dies amb hores"]];
+  if(textFiltre(F, false)) dades.push([], ["Filtre", textFiltre(F, false)]);
   const amples = [11,6,17,12,11,9,9,9,11,10,9,10,30];
-  const nom = "registre-jornada-" + y + (mDe === mA ? "-" + pad(mDe+1) : "") + ".xlsx";
-  dlBlob(nom, xlsx(dades, amples, periodeText(y, mDe, mA).slice(0,31)));
+  dlBlob(nomInforme("registre-jornada", F, "xlsx"), xlsx(dades, amples, nomFull(F)));
 }
-function filesInforme(y, mDe, mA){
-  const P = yr(y).pay, files = [];
+function filesInforme(F){
+  const files = [];
   let tH = 0, tP = 0, tE = 0, tDies = 0, tBe = 0, tBs = 0;
-  for(let m = mDe; m <= mA; m++) for(let d = 1; d <= mlen(y,m); d++){
-    const r = rec(y,m,d); if(!r) continue;
-    const x = calcDia(y,m,d,r,P); if(!x) continue;
+  for(const {y,m,d,r} of diesInforme(F, false)){
+    const x = calcDia(y,m,d,r,yr(y).pay); if(!x) continue;
     const t = dtype(y,m,d);
     files.push([
       iso(y,m,d), WDAYS[wday(y,m,d)], TYPES[t].l,

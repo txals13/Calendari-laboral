@@ -19,6 +19,29 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
 - **⚙️** — bossa de vacances, romanent de l'any anterior, lliure disposició,
   objectiu manual, i exportació/importació de dades.
 
+## Informes
+
+**Fes un informe…** (a ⚙️, a la pestanya Viatges o a la barra dels dies marcats
+del calendari) obre una sola fitxa per als dos informes:
+
+- **Tipus**: registre de jornada (les hores de cada dia) o viatges (dies fora i
+  dietes). Canviar-lo conserva el filtre.
+- **Període**: dues dates lliures, o les dreceres «Aquest mes», «‹ Mes
+  anterior», «Mes següent ›», «Tot l'any» i «Des de l'alta». Pot passar d'un
+  any a l'altre.
+- **Dies de la setmana**, **estat del dia** i **destinació**: interruptors,
+  tots encesos per defecte. Les destinacions que surten són les que hi ha al
+  període, més «Sense destinació». Per treure els dies a la seu, apaga
+  «PRODEC».
+- **Només els dies marcats al calendari**: marca'ls amb ☑ i prem «Informe» a
+  la barra; el període s'ajusta sol.
+- **A nom de**: el nom i l'empresa de la capçalera.
+
+A sota compta en directe quants dies i hores hi entren. Si el filtre deixa dies
+fora, l'informe ho diu a la capçalera («Inclou: destinació MX, PL») i el fitxer
+Excel porta una fila «Filtre» i el sufix `-filtrat`: un document per a l'empresa
+ha de dir que no els inclou tots. El filtre es recorda mentre l'app és oberta.
+
 ## Desfer i refer
 
 El botó **↶** de la cinta de dalt (o **Ctrl+Z** fora d'un camp de text) desfà
