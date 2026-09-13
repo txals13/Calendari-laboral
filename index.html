@@ -224,6 +224,11 @@ td.dim{color:var(--tx3)}
   #print .signa div{flex:1;font-size:8.5pt}
   #print .signa span{display:block;border-bottom:0.6pt solid #000;height:14mm}
   #print .petit{font-size:7.5pt;color:#444}
+  #print table.resum{width:auto;min-width:90mm;margin-top:5mm;font-size:8.5pt}
+  #print table.resum td{border:none;border-bottom:0.4pt solid #ccc;padding:0.9mm 2mm;font-family:inherit}
+  #print table.resum td.ind{padding-left:7mm;color:#444}
+  #print table.resum td.r{font-family:monospace;padding-left:8mm}
+  #print table.resum tr.saldo td{border-top:1pt solid #000;border-bottom:none;font-weight:700}
   #print .filtre{font-size:8.5pt;margin:-2mm 0 4mm;padding:1.5mm 2.5mm;background:#f4f4f4;border-left:2pt solid #000}
   /* A4: sense dir-ho, Chrome fa servir la mida de l'impressora, que pot ser Letter */
   @page{size:A4 portrait;margin:12mm 9mm}
@@ -2850,6 +2855,9 @@ function imprimeixInforme(F){
       </tr></tfoot>
     </table>
     <div class="peu">
+      ${resumExtres(totals).length ? `<table class="resum"><tbody>${resumExtres(totals).map(([l,v,tipus,ind,saldo]) =>
+        `<tr${saldo ? ' class="saldo"' : ""}><td${ind ? ' class="ind"' : ""}>${esc(l)}</td>
+         <td class="r">${tipus === "b" ? sgn(v) : fmt(v)} h</td></tr>`).join("")}</tbody></table>` : ""}
       <div class="signa">
         <div><span></span>Treballador/a</div>
         <div><span></span>Empresa</div>
@@ -2942,13 +2950,20 @@ function exportaXlsx(F){
   const dades = [COLS_INFORME, ...files, [],
     ["Totals", "", "", "", "", "", "", "", totals.hores, totals.previstes, totals.extres,
      r2(totals.bossaEntra - totals.bossaSurt), totals.dies + " dies amb hores"]];
+  const R = resumExtres(totals);
+  if(R.length){
+    dades.push([]);
+    /* el valor va a la columna que li toca: extres sota Extres, bossa sota Bossa */
+    R.forEach(([l,v,tipus,ind]) => { const fila = [(ind ? "   " : "") + l, "", "", "", "", "", "", "", "", "", "", "", ""];
+      fila[tipus === "b" ? 11 : 10] = v; dades.push(fila); });
+  }
   if(textFiltre(F, false)) dades.push([], ["Filtre", textFiltre(F, false)]);
   const amples = [11,6,17,12,11,9,9,9,11,10,9,10,30];
   dlBlob(nomInforme("registre-jornada", F, "xlsx"), xlsx(dades, amples, nomFull(F)));
 }
 function filesInforme(F){
   const files = [];
-  let tH = 0, tP = 0, tE = 0, tDies = 0, tBe = 0, tBs = 0;
+  let tH = 0, tP = 0, tE = 0, tDies = 0, tBe = 0, tBs = 0, tEp = 0, tEb = 0;
   for(const {y,m,d,r} of diesInforme(F, false)){
     const x = calcDia(y,m,d,r,yr(y).pay); if(!x) continue;
     const t = dtype(y,m,d);
@@ -2960,9 +2975,32 @@ function filesInforme(F){
     ]);
     tH += x.h; tP += x.prev; tE += x.extra; if(x.h > 0) tDies++;
     tBe += x.generat; tBs += x.gaudit;
+    /* una extra o es cobra o va a la bossa: així el total d'extres es parteix
+       en dues i s'hi veu la mitja hora que no surt a la nòmina */
+    if(x.descans) tEb += x.extra; else tEp += x.extraPagada;
   }
   return {files, totals:{hores:r2(tH), previstes:r2(tP), extres:r2(tE), dies:tDies,
+                         extresPagades:r2(tEp), extresBossa:r2(tEb),
                          bossaEntra:r2(tBe), bossaSurt:r2(tBs)}};
+}
+/** Resum d'extres i bossa, fila a fila: el total de la columna Bossa és un
+    saldo, i +0,50 i −0,50 hi donen +0,00, que sembla que no sumi. Aquí es veu
+    què ha entrat, què s'ha gaudit i quantes extres hi ha anat. Només si n'hi ha. */
+function resumExtres(t){
+  const hiHaBossa = t.bossaEntra || t.bossaSurt;
+  if(!t.extres && !hiHaBossa) return [];
+  const f = [["Hores extres", t.extres, "e"]];
+  if(t.extresBossa || hiHaBossa){
+    f.push(["pagades", t.extresPagades, "e", 1]);
+    f.push(["compensades amb descans, a la bossa", t.extresBossa, "e", 1]);
+  }
+  if(hiHaBossa){
+    /* amb cap de setmana o festiu (×1,5) les hores de bossa no són les extres */
+    f.push(["Bossa d'hores — entrades" + (Math.abs(t.bossaEntra - t.extresBossa) > 0.005 ? " (amb el factor de cap de setmana i festiu)" : ""), t.bossaEntra, "b"]);
+    f.push(["Bossa d'hores — gaudides", -t.bossaSurt, "b"]);
+    f.push(["Bossa d'hores — saldo del període", r2(t.bossaEntra - t.bossaSurt), "b", 0, 1]);
+  }
+  return f;
 }
 
 /* ───────────────────────── Google Drive ─────────────────────────
