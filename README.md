@@ -11,6 +11,9 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
 - **Resum** — saldo de l'any i saldo fins avui, vacances restants, hores per mes,
   detall mensual, i el preu de l'hora amb la comparativa com a autònom.
 - **Viatges** — dies i hores per destinació, i les estades amb el seu període.
+  Un dia fora és un dia amb estat **Estranger** o **Nacional**: un dia a la seu
+  no hi compta encara que tingui un codi de destinació (p. ex. «PRODEC»). Si un
+  informe no té cap dia, l'app t'ho diu en comptes de treure un PDF buit.
 - **Nòmina** — meritació bruta, exempció de l'art. 7.p, Seguretat Social, IRPF i
   net estimat del mes, més la bossa d'hores de descans i el total de l'any.
 - **⚙️** — bossa de vacances, romanent de l'any anterior, lliure disposició,

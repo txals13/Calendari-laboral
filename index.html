@@ -679,9 +679,12 @@ function stats(y){
         if(r.s === "LD" ){ M.ld  += th; S.ldH  += th; if(past) S.ldYTD  += th; }
       }
       /* els dies fora es compten en dies naturals: un diumenge a l'estranger no
-         té hores però hi ets igual, així que compta com a dia de desplaçament */
-      if(r.d){
-        const k = r.d.toUpperCase();
+         té hores però hi ets igual, així que compta com a dia de desplaçament.
+         Però ha de ser un dia FORA —estat Estranger o Nacional—: el codi sol no
+         n'hi ha prou, i un dia a la seu amb «PRODEC» de destinació sortia a la
+         taula com 89 dies fora mentre el KPI de sobre en deia 0. */
+      if(esFora(r)){
+        const k = clauDest(r);
         S.dest[k] = S.dest[k] || {days:0, worked:0, hours:0};
         S.dest[k].days++;
         if(h > 0){ S.dest[k].worked++; S.dest[k].hours += h; }
@@ -1385,7 +1388,7 @@ function viewTrv(){
   const trips = [];
   let cur = null;
   for(let m=0;m<12;m++) for(let d=1; d<=mlen(y,m); d++){
-    const r = rec(y,m,d), k = r && r.d ? r.d.toUpperCase() : null;
+    const r = rec(y,m,d), k = esFora(r) ? clauDest(r) : null;
     if(k && cur && cur.k === k && cur.gap < 4){ cur.to = [m,d]; cur.days++; cur.gap = 0; }
     else if(k){ if(cur) trips.push(cur); cur = {k, from:[m,d], to:[m,d], days:1, gap:0}; }
     else if(cur) cur.gap++;
@@ -1430,7 +1433,7 @@ function viewTrv(){
   <div class="card">
     <div class="card-t">Dies per destinació — ${y}</div>
     <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). <b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius. <b>Treballats</b> són els que tenen hores.</div>
+    <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). Només hi compten els dies amb estat <b>Estranger</b> o <b>Nacional</b>: un dia a la seu no és un dia fora, encara que hi posis un codi. <b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius. <b>Treballats</b> són els que tenen hores.</div>
     <div class="chips" style="margin-top:10px">
       <button class="btn sm" id="viaPdfMes">Informe del mes (PDF)</button>
       <button class="btn sm" id="viaPdfAny">Informe de l'any (PDF)</button>
@@ -2597,6 +2600,21 @@ function dlBlob(name, blob){
 const COLS_INFORME = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
                       "Pausa (h)","Hores fetes","Previstes","Extres","Bossa (h)","Nota"];
 const MESOS_TOT = -1;
+/** Un dia de desplaçament és un dia amb estat Estranger o Nacional. */
+const esFora = r => !!r && (r.s === "EST" || r.s === "NAC");
+/* sense codi també és un dia fora; va a «—», igual a la pantalla i als informes */
+const clauDest = r => (r.d || "—").toUpperCase();
+/** Un informe sense cap fila no s'imprimeix: un PDF amb la taula buida sembla
+    que l'app hagi perdut les dades, quan el que passa és que no n'hi ha cap
+    que hi encaixi. */
+function senseDies(y, mDe, mA, viatges){
+  const quan = periodeText(y, mDe, mA);
+  alert(viatges
+    ? `No hi ha cap dia fora en el període triat (${quan}).
+
+L'informe de viatges només recull els dies amb estat «Estranger» o «Nacional». Un dia a la seu no hi entra, encara que tingui un codi de destinació.`
+    : `No hi ha cap dia registrat en el període triat (${quan}).`);
+}
 function periodeText(y, mDe, mA){
   return mDe === mA ? `${MONTHS[mDe]} de ${y}`
        : mDe === 0 && mA === 11 ? `Any ${y}`
@@ -2611,6 +2629,7 @@ const JORN_CURTA = {P:"Partida", V:"Divendres", I:"Intensiva", C:"Curta", F:"Fes
     que en una columna estreta al final es partia en mil trossos. */
 function imprimeixInforme(y, mDe, mA){
   const {files, totals} = filesInforme(y, mDe, mA);
+  if(!files.length) return senseDies(y, mDe, mA, false);
   const c = yr(y).cfg;
   /* les mateixes columnes que el full de càlcul, menys la nota; les unitats van
      al peu, i així les capçaleres no obliguen a eixamplar les columnes */
@@ -2681,7 +2700,7 @@ function filesViatges(y, mDe, mA){
   const T = {hores:0, viatge:0, desp:0, client:0, dieta:0, dies:0, treballats:0};
   const dest = {};
   for(let m = mDe; m <= mA; m++) for(let d = 1; d <= mlen(y,m); d++){
-    const r = rec(y,m,d); if(!r || !["EST","NAC"].includes(r.s)) continue;
+    const r = rec(y,m,d); if(!esFora(r)) continue;
     const x = calcDia(y,m,d,r,P); if(!x) continue;
     const fitx = [r.vi, r.i, r.f, r.vf].filter(Boolean);
     files.push([
@@ -2692,7 +2711,7 @@ function filesViatges(y, mDe, mA){
     T.hores += x.h; T.viatge += x.viatge; T.desp += x.desplacament;
     T.client += x.treball; T.dieta += x.dieta; T.dies++;
     if(x.h > 0) T.treballats++;
-    const k = (r.d || "—").toUpperCase();
+    const k = clauDest(r);
     dest[k] = dest[k] || {dies:0, treballats:0, hores:0, dieta:0};
     dest[k].dies++; dest[k].hores += x.h; dest[k].dieta += x.dieta;
     if(x.h > 0) dest[k].treballats++;
@@ -2703,6 +2722,7 @@ function filesViatges(y, mDe, mA){
 }
 function imprimeixViatges(y, mDe, mA){
   const {files, T, dest} = filesViatges(y, mDe, mA);
+  if(!files.length) return senseDies(y, mDe, mA, true);
   const c = yr(y).cfg;
   const num = new Set([5,6,7,8,9]);
   const cap = COLS_VIATGES.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
@@ -2742,6 +2762,7 @@ function imprimeixViatges(y, mDe, mA){
 }
 function exportaViatgesXlsx(y, mDe, mA){
   const {files, T, dest} = filesViatges(y, mDe, mA);
+  if(!files.length) return senseDies(y, mDe, mA, true);
   const dades = [COLS_VIATGES, ...files, [],
     ["Totals","","","","", T.hores, T.viatge, T.desp, T.client, T.dieta],
     [], ["Resum per destinació"], ["Destinació","Dies fora","Treballats","Hores","Dietes (€)"]];
@@ -2754,6 +2775,7 @@ function exportaViatgesXlsx(y, mDe, mA){
 
 function exportaXlsx(y, mDe, mA){
   const {files, totals} = filesInforme(y, mDe, mA);
+  if(!files.length) return senseDies(y, mDe, mA, false);
   const dades = [COLS_INFORME, ...files, [],
     ["Totals", "", "", "", "", "", "", "", totals.hores, totals.previstes, totals.extres,
      r2(totals.bossaEntra - totals.bossaSurt), totals.dies + " dies amb hores"]];
