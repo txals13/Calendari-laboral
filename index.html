@@ -2814,7 +2814,6 @@ const JORN_CURTA = {P:"Partida", V:"Divendres", I:"Intensiva", C:"Curta", F:"Fes
 function imprimeixInforme(F){
   const {files, totals} = filesInforme(F);
   if(!files.length) return senseDies(F, false);
-  const y = partDia(F.de).y;
   /* les mateixes columnes que el full de càlcul, menys la nota; les unitats van
      al peu, i així les capçaleres no obliguen a eixamplar les columnes */
   const COLS = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
@@ -2851,15 +2850,6 @@ function imprimeixInforme(F){
       </tr></tfoot>
     </table>
     <div class="peu">
-      <p>Totes les quantitats són <b>hores en format decimal</b>: 8,25 són 8 h 15 min.
-         Les <b>hores extres</b> es compten dia a dia: són les hores fetes per damunt de
-         les previstes de cada jornada, i no es compensen amb els dies que se'n fan menys.
-         Les hores previstes surten del calendari laboral signat.</p>
-      ${totals.bossaEntra || totals.bossaSurt ? `<p>La columna <b>Bossa</b> és la bossa d'hores de descans: amb <b>+</b>,
-         hores extres que no es cobren i queden per tornar en temps (×${fmt(yr(y).pay.factCdS)} en cap de setmana o festiu);
-         amb <b>−</b>, hores de la bossa gaudides aquell dia. Un dia amb menys hores que les previstes i un
-         <b>−</b> a la bossa és una jornada completa, compensada amb temps acumulat abans.
-         En aquest període: <b>+${fmt(totals.bossaEntra)} h</b> generades i <b>−${fmt(totals.bossaSurt)} h</b> gaudides.</p>` : ""}
       <div class="signa">
         <div><span></span>Treballador/a</div>
         <div><span></span>Empresa</div>
@@ -2925,9 +2915,6 @@ function imprimeixViatges(F){
       <h2 style="font-size:11pt;margin:6mm 0 2mm">Resum per destinació</h2>
       <table><thead><tr><th>Destinació</th><th class="r">Dies fora</th><th class="r">Treballats</th>
         <th class="r">Hores</th><th class="r">Dietes (€)</th></tr></thead><tbody>${resum}</tbody></table>
-      <p><b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius, perquè s'hi és igual.
-         <b>Viatge</b> és el trajecte llarg de porta a porta; <b>desplaçament</b>, l'anar i venir diari
-         fins al client. La resta d'hores del dia són treball efectiu.</p>
       <div class="signa"><div><span></span>Treballador/a</div><div><span></span>Empresa</div></div>
       <p class="petit">Document generat el ${new Date().toLocaleDateString("ca-ES")} a partir del registre propi.</p>
     </div>`;

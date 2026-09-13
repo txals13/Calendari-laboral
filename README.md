@@ -111,8 +111,8 @@ El **saldo** d'hores no canvia pel fet de fer servir la bossa: la mitja hora de
 més del dilluns i la de menys del divendres ja s'hi compensen soles.
 
 El **registre de jornada** exportable (PDF i .xlsx) porta una columna **Bossa**
-amb +0,50 el dilluns i −0,50 el divendres, i una nota que explica que un dia amb
-menys hores i un − a la bossa és una jornada completa compensada.
+amb +0,50 el dilluns i −0,50 el divendres. Els informes no porten cap text
+explicatiu al peu: només les signatures i la data en què s'han generat.
 
 **Quan es cobra.** Les hores extres no es cobren el mes que es fan: surten a la
 nòmina **dos mesos després** (paràmetre *Hores extres: mesos de retard*). Les del
