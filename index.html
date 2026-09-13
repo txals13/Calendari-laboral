@@ -202,10 +202,18 @@ td.dim{color:var(--tx3)}
   #print .sub{display:flex;justify-content:space-between;font-size:10pt;margin-bottom:4mm;
     padding-bottom:2mm;border-bottom:1.5pt solid #000}
   #print table{width:100%;border-collapse:collapse;font-size:8pt}
-  #print th,#print td{border:0.4pt solid #999;padding:1.2mm 1.6mm;text-align:left;vertical-align:top}
+  /* una línia per dia: res es parteix, llevat de la nota */
+  #print th,#print td{border:0.4pt solid #999;padding:1mm 1.3mm;text-align:left;vertical-align:top;white-space:nowrap}
+  #print tr.nota td{white-space:normal;font-family:-apple-system,"Segoe UI",system-ui,sans-serif;
+    font-style:italic;color:#333;border-top:none;padding:0.6mm 1.3mm 1.2mm 6mm}
+  #print tr.amb-nota td{border-bottom-color:transparent}
+  #print tbody{break-inside:avoid}
   #print th{background:#eee;font-weight:700;border-color:#666}
   #print .r{text-align:right;white-space:nowrap}
   #print thead{display:table-header-group}      /* la capçalera es repeteix a cada pàgina */
+  /* els totals, en canvi, només al final: Chrome repeteix el <tfoot> a cada
+     pàgina, i els de l'any al peu de la primera semblaven els d'aquella pàgina */
+  #print tfoot{display:table-row-group}
   #print tr{break-inside:avoid}
   #print tfoot td{border-top:1.2pt solid #000;background:#f4f4f4}
   #print .peu{margin-top:5mm;font-size:8.5pt;line-height:1.45}
@@ -213,7 +221,8 @@ td.dim{color:var(--tx3)}
   #print .signa div{flex:1;font-size:8.5pt}
   #print .signa span{display:block;border-bottom:0.6pt solid #000;height:14mm}
   #print .petit{font-size:7.5pt;color:#444}
-  @page{margin:14mm 10mm}
+  /* A4: sense dir-ho, Chrome fa servir la mida de l'impressora, que pot ser Letter */
+  @page{size:A4 portrait;margin:12mm 9mm}
 }
 </style>
 </head>
@@ -2594,15 +2603,34 @@ function periodeText(y, mDe, mA){
        : `${MONTHS[mDe]} – ${MONTHS[mA]} de ${y}`;
 }
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF". */
+/* Al PDF, noms de jornada curts: amb els llargs («Intensiva d'estiu») la columna
+   s'havia de partir en dues línies i cada dia n'ocupava dues. */
+const JORN_CURTA = {P:"Partida", V:"Divendres", I:"Intensiva", C:"Curta", F:"Festiu", B:"Pont", X:"No laborable"};
+/** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF".
+    Cada dia és UNA línia; la nota, si n'hi ha, va a sota ocupant tota l'amplada,
+    que en una columna estreta al final es partia en mil trossos. */
 function imprimeixInforme(y, mDe, mA){
   const {files, totals} = filesInforme(y, mDe, mA);
   const c = yr(y).cfg;
+  /* les mateixes columnes que el full de càlcul, menys la nota; les unitats van
+     al peu, i així les capçaleres no obliguen a eixamplar les columnes */
+  const COLS = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
+                "Pausa","Fetes","Previstes","Extres","Bossa"];
+  const NOTA = COLS_INFORME.length - 1, BOSSA = 11, JORN = 2;
   const num = new Set([7,8,9,10,11]);   /* columnes numèriques, alineades a la dreta */
-  const BOSSA = 11;                     /* amb signe: + hi entra, − en surt */
-  const cap = COLS_INFORME.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
-  const cos = files.map(f => "<tr>" + f.map((v,i) =>
-      `<td${num.has(i)?' class="r"':""}>${typeof v === "number"
-        ? (v ? (i === BOSSA ? sgn(v) : fmt(v)) : "") : esc(v)}</td>`).join("") + "</tr>").join("");
+  const cap = COLS.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
+  /* un <tbody> per dia: així el dia i la seva nota no se separen entre pàgines */
+  const cos = files.map(f => {
+    const [yy,mm,dd] = f[0].split("-").map(Number);
+    const cel = f.slice(0, NOTA).map((v,i) => {
+      if(i === JORN) v = JORN_CURTA[dtype(yy,mm-1,dd)] || v;
+      const txt = typeof v === "number" ? (v ? (i === BOSSA ? sgn(v) : fmt(v)) : "") : esc(v);
+      return `<td${num.has(i)?' class="r"':""}>${txt}</td>`;
+    }).join("");
+    const nota = f[NOTA] ? `<tr class="nota"><td colspan="${COLS.length}">${esc(f[NOTA])}</td></tr>` : "";
+    return `<tbody><tr${nota ? ' class="amb-nota"' : ""}>${cel}</tr>${nota}</tbody>`;
+  }).join("");
+  const bossaNeta = r2(totals.bossaEntra - totals.bossaSurt);
   const doc = document.getElementById("print");
   doc.innerHTML = `
     <h1>Registre de jornada</h1>
@@ -2610,28 +2638,28 @@ function imprimeixInforme(y, mDe, mA){
       <div><b>${esc(c.nom || "")}</b>${c.empresa ? " · " + esc(c.empresa) : ""}</div>
       <div>${esc(periodeText(y, mDe, mA))}</div>
     </div>
-    <table>
+    <table class="jornada">
       <thead><tr>${cap}</tr></thead>
-      <tbody>${cos}</tbody>
+      ${cos}
       <tfoot><tr>
         <td colspan="7"><b>Totals</b> — ${totals.dies} dies amb hores registrades</td>
         <td class="r"></td>
         <td class="r"><b>${fmt(totals.hores)}</b></td>
         <td class="r">${fmt(totals.previstes)}</td>
         <td class="r"><b>${fmt(totals.extres)}</b></td>
-        <td class="r">${totals.bossaEntra || totals.bossaSurt
-          ? "+" + fmt(totals.bossaEntra) + " / −" + fmt(totals.bossaSurt) : ""}</td>
-        <td></td>
+        <td class="r">${totals.bossaEntra || totals.bossaSurt ? sgn(bossaNeta) : ""}</td>
       </tr></tfoot>
     </table>
     <div class="peu">
-      <p>Les <b>hores extres</b> es compten dia a dia: són les hores fetes per damunt de
+      <p>Totes les quantitats són <b>hores en format decimal</b>: 8,25 són 8 h 15 min.
+         Les <b>hores extres</b> es compten dia a dia: són les hores fetes per damunt de
          les previstes de cada jornada, i no es compensen amb els dies que se'n fan menys.
          Les hores previstes surten del calendari laboral signat.</p>
       ${totals.bossaEntra || totals.bossaSurt ? `<p>La columna <b>Bossa</b> és la bossa d'hores de descans: amb <b>+</b>,
          hores extres que no es cobren i queden per tornar en temps (×${fmt(yr(y).pay.factCdS)} en cap de setmana o festiu);
          amb <b>−</b>, hores de la bossa gaudides aquell dia. Un dia amb menys hores que les previstes i un
-         <b>−</b> a la bossa és una jornada completa, compensada amb temps acumulat abans.</p>` : ""}
+         <b>−</b> a la bossa és una jornada completa, compensada amb temps acumulat abans.
+         En aquest període: <b>+${fmt(totals.bossaEntra)} h</b> generades i <b>−${fmt(totals.bossaSurt)} h</b> gaudides.</p>` : ""}
       <div class="signa">
         <div><span></span>Treballador/a</div>
         <div><span></span>Empresa</div>
