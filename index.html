@@ -1012,7 +1012,7 @@ function payMonth(y,m,noIrpf,sensRetard){
 
   /* D — IRPF */
   M.tipus = noIrpf ? 0 : irpfRate(y);
-  M.irpf  = -r2(M.subjecte * M.tipus);
+  M.irpf  = -r2(M.subjecte * M.tipus) || 0;      /* sense el || 0 surt «-0,00» */
   M.net   = r2(M.brut + M.ss + M.irpf);
 
   /* E — bossa d'hores de descans */
