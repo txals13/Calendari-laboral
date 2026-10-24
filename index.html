@@ -335,7 +335,7 @@ const KEY = "cal_v1_data", KTHM = "cal_v1_thm", KTOK = "cal_v1_tok", KROOT = "ca
    l'ordinador de casa no */
 let PRIVAT = false;
 const DEFCFG = y => ({vacH: VACANCES[y] || VACANCES[Math.max(...Object.keys(VACANCES))],
-                      ldH:12, carry:0, target:null});
+                      ldH:12, carry:0, carryAuto:true, target:null});
 /* Paràmetres de nòmina — valors inicials presos del full ⚙️ Config del
    simulador 2026. Tot el motor llegeix d'aquí: canviant un número es recalcula. */
 const DEFPAY = () => ({
@@ -442,11 +442,16 @@ async function load(){
     try{ const r = localStorage.getItem(KEY); if(r) DB = JSON.parse(r); }catch(e){}
   }
   if(!DB.years) DB = {v:1, years:{}};
+  DBVER++;
 }
 /** Desa sense fer esperar qui crida: el DB en memòria ja és la font de
     veritat per pintar, i tots els cridants són «desa i segueix». */
 let saveErr = false;
+/* Puja a cada escriptura del DB. Serveix per saber si un valor memoritzat
+   encara val, sense haver de buidar memòries des de mig món. */
+let DBVER = 0;
 function persist(){
+  DBVER++;
   if(idb) return idbSet(idb, "db", DB).catch(avisaDesat);
   try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){ avisaDesat(e); }
   return Promise.resolve();
@@ -654,6 +659,59 @@ function dinsContracte(y,m,d,P){
   return true;
 }
 
+
+/* ── Vacances que passen d'un any a l'altre ──
+   El que no gastes d'un any se't suma a la bossa del següent. Es calcula sol
+   seguint la cadena d'anys registrats, perquè si no, cada 1 de gener hauries
+   de fer la resta a mà i copiar-la aquí.
+   Només compten els anys que tenen dies registrats: un any que no has fet
+   servir no té cap romanent —hi sortiria la bossa sencera— i es salta. */
+const teDies = y => { const o = DB.years[String(y)];
+                      return !!o && Object.values(o.days || {}).some(r => r && !r.del); };
+/** Hores de vacances gastades un any: les de jornada dels dies marcats VAC,
+    amb la mateixa regla que el Resum —fora del contracte no compten. */
+function vacGastades(y){
+  const o = DB.years[String(y)];
+  if(!o) return 0;
+  const P = yr(y).pay;
+  let h = 0;
+  for(let m=0;m<12;m++) for(let d=1; d<=mlen(y,m); d++){
+    const r = rec(y,m,d);
+    if(r && r.s === "VAC" && dinsContracte(y,m,d,P)) h += TYPES[dtype(y,m,d)].h;
+  }
+  return r2(h);
+}
+/** Romanent que arriba a l'any y des dels anteriors. Es recorre endavant des
+    del primer any amb dades, que és l'únic ordre en què la cadena té sentit;
+    un any amb romanent manual la talla i hi posa el seu número. */
+const MEMO_CARRY = new Map();
+function carryAuto(y){
+  /* Recórrer els anys anteriors dia a dia costa prou com per notar-se a la
+     fitxa del dia, que es repinta a cada tecla. Mentre el DB no canviï, el
+     número no pot canviar. */
+  const clau = y + "@" + DBVER;
+  if(MEMO_CARRY.has(clau)) return MEMO_CARRY.get(clau);
+  const anys = Object.keys(DB.years).map(Number)
+    .filter(a => a < y && teDies(a)).sort((a,b) => a - b);
+  let c = 0;
+  for(const a of anys){
+    const cfg = yr(a).cfg;
+    const entra = cfg.carryAuto === false ? (+cfg.carry || 0) : c;
+    c = r2((+cfg.vacH || 0) + entra - vacGastades(a));
+  }
+  if(MEMO_CARRY.size > 40) MEMO_CARRY.clear();
+  MEMO_CARRY.set(clau, c);
+  return c;
+}
+/** Anys registrats abans de y, que són els que alimenten el romanent. */
+const anysAmbDades = y => Object.keys(DB.years).map(Number)
+  .filter(a => a < y && teDies(a)).sort((a,b) => a - b);
+/** El romanent de l'any y: el seu número si l'has fixat, si no el calculat. */
+function carryDe(y){
+  const cfg = yr(y).cfg;
+  return cfg.carryAuto === false ? (+cfg.carry || 0) : carryAuto(y);
+}
+
 /* ───────────────────────── Agregats ───────────────────────── */
 function stats(y){
   const o = yr(y), today = new Date();
@@ -752,7 +810,9 @@ function stats(y){
   S.saldo      = S.done - S.target;
   S.targetYTD  = S.theoYTD - S.vacYTD - S.ldYTD;
   S.saldoYTD   = S.doneYTD - S.targetYTD;
-  S.vacLeft    = (+o.cfg.vacH || 0) + (+o.cfg.carry || 0) - S.vacH;
+  S.carry      = carryDe(y);
+  S.vacBossa   = r2((+o.cfg.vacH || 0) + S.carry);
+  S.vacLeft    = r2(S.vacBossa - S.vacH);
   S.ldLeft     = (+o.cfg.ldH  || 0) - S.ldH;
   return S;
 }
@@ -1358,7 +1418,9 @@ function viewSum(){
           S.extra>0?"pos":"", true)}
     ${kpi("Saldo de l'any (h)", sgn(S.saldo), "fetes "+fmt(S.done)+" · objectiu "+fmt(S.target), S.saldo>=0?"pos":"neg")}
     ${kpi("Saldo fins avui (h)", sgn(S.saldoYTD), "objectiu a data d'avui "+fmt(S.targetYTD), S.saldoYTD>=0?"pos":"neg")}
-    ${kpi("Vacances restants (h)", fmt(S.vacLeft), "de "+fmt((+S.cfg.vacH||0)+(+S.cfg.carry||0))+" h · "+S.days.VAC+" dies marcats", S.vacLeft<0?"neg":"")}
+    ${kpi("Vacances restants (h)", fmt(S.vacLeft),
+          "de " + fmt(S.vacBossa) + " h" + (S.carry ? " (" + fmt(+S.cfg.vacH||0) + " " + sgn(S.carry) + " de l'any abans)" : "")
+          + " · " + S.days.VAC + " dies marcats", S.vacLeft<0?"neg":"")}
     ${kpi("Lliure disposició (h)", fmt(S.ldLeft), "de "+fmt(+S.cfg.ldH||0)+" h", S.ldLeft<0?"neg":"")}
     ${kpiBossa(y, kpi, S.bossa)}
   </div>
@@ -2375,17 +2437,29 @@ function openCfg(){
     <div class="note" style="margin:-8px 0 4px">${
       S.vacH + S.ldH === 0
       ? `Encara no has marcat cap dia de vacances, així que no hi ha res a descomptar de les ${fmt(S.theoTot)} h.
-         Quan hi marquis els ${fmt((+c.vacH||0)+(+c.carry||0))} h de la bossa, l'objectiu baixarà als
-         <b>${fmt(S.theoTot - (+c.vacH||0) - (+c.carry||0))} h</b> del conveni.`
+         Quan hi marquis les ${fmt(S.vacBossa)} h de la bossa, l'objectiu baixarà a les
+         <b>${fmt(r2(S.theoTot - S.vacBossa))} h</b> del conveni.`
       : `${fmt(S.theoTot)} h − ${fmt(S.vacH)} h de vacances${S.ldH?` − ${fmt(S.ldH)} h de lliure disposició`:""} marcades al calendari.`
     }</div>
     <div class="row2">
       <div><div class="lbl">Bossa de vacances (h)</div><input class="fld" id="cVac" type="number" step="0.25" value="${c.vacH}"></div>
-      <div><div class="lbl">Romanent any anterior (h)</div><input class="fld" id="cCar" type="number" step="0.25" value="${c.carry}"></div>
+      <div><div class="lbl">Romanent any anterior (h)</div>
+        <div class="hrow" style="grid-template-columns:1fr auto">
+          <input class="fld" id="cCar" type="number" step="0.25" value="${c.carryAuto === false ? c.carry : fmt(S.carry).replace(",", ".")}"${c.carryAuto === false ? "" : " disabled"}>
+          <button class="btn sm" id="cCarMode" style="width:auto;height:40px;padding:0 10px">${c.carryAuto === false ? "MANUAL" : "AUTO"}</button>
+        </div></div>
       <div><div class="lbl">Lliure disposició (h)</div><input class="fld" id="cLd" type="number" step="0.25" value="${c.ldH}"></div>
       <div><div class="lbl">Objectiu manual (h)</div><input class="fld" id="cTgt" type="number" step="0.25" value="${c.target??""}" placeholder="auto"></div>
     </div>
-    <div class="note">L'objectiu es calcula sol: hores de jornada del calendari menys les dels dies que marquis com a vacances o lliure disposició. Omple l'objectiu manual només si vols fixar-lo tu.
+    <div class="note">El <b>romanent</b> són les hores de vacances que et van sobrar i pots gastar aquest any. En <b>AUTO</b> surt sol de l'any anterior${
+      anysAmbDades(y).length ? ": " + anysAmbDades(y).map(a => {
+        const cf = yr(a).cfg;
+        return `${a}, ${fmt(+cf.vacH||0)} h${carryDe(a) ? " + " + fmt(carryDe(a)) + " h" : ""} − ${fmt(vacGastades(a))} h gastades`;
+      }).join(" · ") + " = <b>" + fmt(S.carry) + " h</b>"
+      : ", i com que no hi ha cap any anterior registrat, ara val 0."}
+      ${S.carry < 0 ? `<br><b style="color:var(--gold)">Surt negatiu</b>: l'any passat vas gastar més vacances de les que tenies, i aquest any en tens menys.` : ""}
+      <br>Comprova fins quan te les deixa gastar el teu conveni: no totes les empreses accepten passar-les a l'any següent sense data límit.
+      <br>L'objectiu es calcula sol: hores de jornada del calendari menys les dels dies que marquis com a vacances o lliure disposició. Omple l'objectiu manual només si vols fixar-lo tu.
       <br>Les <b>${fmt(yr(y).pay.horesAny)} h</b> que fa servir la nòmina per calcular l'hora ordinària són una altra cosa: la xifra fixa del conveni, i es canvia als paràmetres de nòmina.</div>
     <div class="lbl">Sincronització</div>
     ${!origenValid() ? `<div class="note" style="color:var(--red);margin-bottom:8px">
@@ -2416,9 +2490,19 @@ function openCfg(){
     <input type="file" id="fileIn" accept="application/json" class="hide">
     <div class="acts"><button class="btn pri" id="shOk">Desa</button></div>`);
   $("shX").onclick = closeSheet;
+  /* el camp només s'escriu en MANUAL; en AUTO hi surt el calculat, apagat */
+  $("cCarMode").onclick = () => {
+    const auto = $("cCarMode").textContent === "AUTO";
+    $("cCarMode").textContent = auto ? "MANUAL" : "AUTO";
+    $("cCar").disabled = !auto;
+    if(!auto) $("cCar").value = fmt(carryAuto(y)).replace(",", ".");
+    else $("cCar").focus();
+  };
   $("shOk").onclick = () => {
     const o = yr(y).cfg;
-    o.vacH = +$("cVac").value || 0; o.carry = +$("cCar").value || 0;
+    o.vacH = +$("cVac").value || 0;
+    o.carryAuto = $("cCarMode").textContent === "AUTO";
+    if(!o.carryAuto) o.carry = +$("cCar").value || 0;
     o.ldH  = +$("cLd").value  || 0;
     const t = $("cTgt").value.trim(); o.target = t === "" ? null : +t;
     yr(y).cfgT = Date.now();

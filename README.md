@@ -16,8 +16,8 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
   informe no té cap dia, l'app t'ho diu en comptes de treure un PDF buit.
 - **Nòmina** — meritació bruta, exempció de l'art. 7.p, Seguretat Social, IRPF i
   net estimat del mes, més la bossa d'hores de descans i el total de l'any.
-- **⚙️** — bossa de vacances, romanent de l'any anterior, lliure disposició,
-  objectiu manual, i exportació/importació de dades.
+- **⚙️** — bossa de vacances, romanent de l'any anterior (AUTO o a mà),
+  lliure disposició, objectiu manual, i exportació/importació de dades.
 
 ## Informes
 
@@ -270,6 +270,16 @@ soles el primer cop que obres l'app i la còpia vella s'allibera.
   hores dels dies marcats com a vacances o lliure disposició. Per al 2026:
   1.890,00 − 144,00 = **1.746,00 h**; per al 2027, 1.942,00 − 200,00 =
   **1.742,00 h**, tal com diuen els calendaris signats.
+- Les **hores de vacances que no gastes passen a l'any següent**. El romanent
+  es calcula sol: bossa de l'any + el que va sobrar de l'anterior − les hores
+  dels dies que hi vas marcar com a vacances. La cadena segueix només els anys
+  que tens registrats, perquè un any que no has fet servir no té cap romanent;
+  a ⚙️ pots passar-lo a **MANUAL** i fixar-hi el número que vulguis, i llavors
+  la cadena es talla aquell any.
+  Si un any gastes més vacances de les que tens, el romanent surt **negatiu** i
+  l'any següent en tens menys: és el que toca, i l'app t'ho avisa.
+  ⚠️ Comprova fins quan te les deixa gastar el teu conveni — l'app no hi posa
+  cap data límit.
 
 ## El calendari de cada any
 
