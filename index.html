@@ -265,9 +265,14 @@ td.dim{color:var(--tx3)}
 "use strict";
 /* ───────────────────────── Calendari oficial ─────────────────────────
    Una lletra per dia natural, de l'1 de gener al 31 de desembre.
-   P jornada partida 8,25 · V divendres 6,00 · I intensiva estiu 7,00
-   C jornada curta 6,50 · F festiu · B pont (vacances) · X no laborable
-   El 2026 està transcrit del calendari laboral signat (1.890,00 h). */
+   Cada any signat porta els seus tipus de jornada, que no tenen per què
+   coincidir: per això les lletres no es reaprofiten entre anys encara que
+   les hores s'assemblin.
+     2026 · P partida 8,25 · V divendres 6,00 · I intensiva estiu 7,00
+            C curta 6,50                                  (1.890,00 h)
+     2027 · N normal 8,50 · E intensiva 7-15 8,00
+            S especial 6,00 · M especial 6,50             (1.942,00 h)
+   Comunes: F festiu · B pont (vacances) · X no laborable */
 const CAL = {
   2026:
     "FBXXBFPPVXXPPPPVXXPPPPVXXPPPPVX" + // gener
@@ -281,14 +286,36 @@ const CAL = {
     "PPPVXXPPPVFXXPPPPVXXPPPPVXXPPP"  + // setembre
     "PVXXPPPPVXXFPPPVXXPPPPVXXPPPPVX" + // octubre
     "FPPPPVXXPPPPVXXPPPPVXXPPPPVXXP"  + // novembre
-    "PPPVXFFFPPVXXPPPPVXXPPPCFFXPPPC"   // desembre
+    "PPPVXFFFPPVXXPPPPVXXPPPCFFXPPPC",  // desembre
+  2027:
+    "FXXNSFNMXXNNNNSXXNNNNSXXNNNNSXX" + // gener
+    "NNNNSXXNNNNSXXNNNNSXXNNNNSXX" + // febrer
+    "NNNNSXXNNNNSXXNNNNSXXNNNBFXXFNN" + // març
+    "NSXXNNNNSXXNNNNSXXNNNNBXXNNNNS" + // abril
+    "FXNNNNSXXFNNNMXXNNNNSXXNNNNSXXN" + // maig
+    "NNNSXXNNNNSXXNNNNSXXNNBFBXXEEE" + // juny
+    "EEXXEEEEEXXEEEEEXXEEEEEXXEEEEEX" + // juliol
+    "XEEEEEXXEEEEEXFEEEEEXXEEEEEXXNN" + // agost
+    "NNSXXNNNNSFXNNNNSXXNNNNSXXNNNN" + // setembre
+    "SXXNNNNSXXBFNNMXXNNNNSXXNNNNSXX" + // octubre
+    "FNNNSXXNNNNSXXNNNNSXXNNNNSXXNN" + // novembre
+    "NNSXXFBFNSXXNNNNSXXNNNSBFFNNNSB"   // desembre
 };
 
 const TYPES = {
+  /* 2026 */
   P:{h:8.25,l:"Jornada partida"}, V:{h:6.00,l:"Divendres"},
   I:{h:7.00,l:"Intensiva d'estiu"}, C:{h:6.50,l:"Jornada curta"},
+  /* 2027 — el conveni en diu «especial», i no van lligades al dia de la
+     setmana: hi ha dimarts de 6 h i divendres de 6,5 h */
+  N:{h:8.50,l:"Jornada normal"}, E:{h:8.00,l:"Intensiva (7 a 15)"},
+  S:{h:6.00,l:"Jornada especial 6 h"}, M:{h:6.50,l:"Jornada especial 6,5 h"},
+  /* comunes */
   F:{h:0,l:"Festiu"}, B:{h:0,l:"Pont (vacances)"}, X:{h:0,l:"No laborable"}
 };
+/* Bossa de vacances de cada any signat, en hores: és el que et correspon, no
+   el que has gastat. Un any que no hi sigui agafa el darrer conegut. */
+const VACANCES = {2026:144, 2027:200};
 const STATES = {
   HQ :{l:"HQ",        s:"A la seu",         c:"--tx2",    v:"-"},
   EST:{l:"Estranger", s:"Viatge fora",      c:"--orange", v:"I"},
@@ -307,7 +334,8 @@ const KEY = "cal_v1_data", KTHM = "cal_v1_thm", KTOK = "cal_v1_tok", KROOT = "ca
 /* preferència d'aquest dispositiu, no va a Drive: al mòbil pots voler-lo i a
    l'ordinador de casa no */
 let PRIVAT = false;
-const DEFCFG = () => ({vacH:144, ldH:12, carry:0, target:null});
+const DEFCFG = y => ({vacH: VACANCES[y] || VACANCES[Math.max(...Object.keys(VACANCES))],
+                      ldH:12, carry:0, target:null});
 /* Paràmetres de nòmina — valors inicials presos del full ⚙️ Config del
    simulador 2026. Tot el motor llegeix d'aquí: canviant un número es recalcula. */
 const DEFPAY = () => ({
@@ -468,7 +496,7 @@ function tancaPas(){
     });
     /* amb els valors per defecte omplerts: que yr() completi una clau nova no
        és cap canvi teu */
-    const norm = o => JSON.stringify([Object.assign(DEFCFG(), o.cfg||{}), Object.assign(DEFPAY(), o.pay||{})]);
+    const norm = o => JSON.stringify([Object.assign(DEFCFG(+y), o.cfg||{}), Object.assign(DEFPAY(), o.pay||{})]);
     if(norm(a) !== norm(b)) canvis.push({y, t:"cfg", abans:{cfg:copia(a.cfg), pay:copia(a.pay)}});
   });
   foto();
@@ -549,7 +577,7 @@ function avisa(txt){
 }
 function yr(y){
   y = String(y);
-  if(!DB.years[y]) DB.years[y] = {days:{}, cfg:DEFCFG()};
+  if(!DB.years[y]) DB.years[y] = {days:{}, cfg:DEFCFG(+y)};
   const o = DB.years[y];
   if(!o.days) o.days = {};
   /* net real cobrat, per mes ("0".."11"): {v, t} o una làpida {del:1, t} */
@@ -557,7 +585,7 @@ function yr(y){
   /* Completem les claus que faltin SENSE substituir l'objecte: hi ha codi que
      en guarda la referència, i abans es quedava apuntant a una còpia òrfena. */
   const fill = (dst, def) => { for(const k in def) if(!(k in dst)) dst[k] = def[k]; return dst; };
-  if(!o.cfg) o.cfg = {}; fill(o.cfg, DEFCFG());
+  if(!o.cfg) o.cfg = {}; fill(o.cfg, DEFCFG(+y));
   if(!o.pay) o.pay = {}; fill(o.pay, DEFPAY());
   return o;
 }
@@ -2812,7 +2840,9 @@ function pintaInforme(){
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF". */
 /* Al PDF, noms de jornada curts: amb els llargs («Intensiva d'estiu») la columna
    s'havia de partir en dues línies i cada dia n'ocupava dues. */
-const JORN_CURTA = {P:"Partida", V:"Divendres", I:"Intensiva", C:"Curta", F:"Festiu", B:"Pont", X:"No laborable"};
+const JORN_CURTA = {P:"Partida", V:"Divendres", I:"Intensiva", C:"Curta",
+                    N:"Normal", E:"Intensiva", S:"Especial 6 h", M:"Especial 6,5 h",
+                    F:"Festiu", B:"Pont", X:"No laborable"};
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF".
     Cada dia és UNA línia; la nota, si n'hi ha, va a sota ocupant tota l'amplada,
     que en una columna estreta al final es partia en mil trossos. */
@@ -3036,7 +3066,7 @@ function mergeDB(a, b){
     const newerA = (ay.cfgT||0) >= (by.cfgT||0);
     const tria = k => (newerA ? ay[k] : by[k]) || ay[k] || by[k] || {};
     out.years[y] = {days, netReal, cfgT: Math.max(ay.cfgT||0, by.cfgT||0),
-                    cfg: Object.assign(DEFCFG(), tria("cfg")),
+                    cfg: Object.assign(DEFCFG(+y), tria("cfg")),
                     pay: Object.assign(DEFPAY(), tria("pay"))};
   });
   return out;

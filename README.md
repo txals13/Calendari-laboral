@@ -268,32 +268,61 @@ soles el primer cop que obres l'app i la còpia vella s'allibera.
   pròpia jornada** (8,25 · 6,00 · 7,00 · 6,50) en comptes d'un número fix.
 - L'**objectiu** de l'any surt de les hores teòriques del calendari menys les
   hores dels dies marcats com a vacances o lliure disposició. Per al 2026:
-  1.890,00 − 144,00 = **1.746,00 h**, tal com diu el calendari signat.
+  1.890,00 − 144,00 = **1.746,00 h**; per al 2027, 1.942,00 − 200,00 =
+  **1.742,00 h**, tal com diuen els calendaris signats.
 
 ## El calendari de cada any
 
 `CAL` (a dalt de tot del `<script>`) guarda **una lletra per dia natural**, de
 l'1 de gener al 31 de desembre:
 
+Cada any signat porta els **seus** tipus de jornada, i les lletres no es
+reaprofiten entre anys encara que les hores s'assemblin: així l'etiqueta que
+surt a la fitxa del dia i a l'informe és la del conveni d'aquell any.
+
 | Lletra | h/dia | Què és |
 |---|---|---|
+| `F` | 0 | festiu |
+| `B` | 0 | pont — compta com a vacances |
+| `X` | 0 | no laborable |
+| **2026** | | |
 | `P` | 8,25 | jornada partida (dl-dj) |
 | `V` | 6,00 | divendres |
 | `I` | 7,00 | intensiva d'estiu |
 | `C` | 6,50 | jornada curta (24 i 31 de desembre) |
-| `F` | 0 | festiu |
-| `B` | 0 | pont — compta com a vacances |
-| `X` | 0 | no laborable |
+| **2027** | | |
+| `N` | 8,50 | jornada normal |
+| `E` | 8,00 | intensiva (7 a 15) |
+| `S` | 6,00 | jornada especial 6 h |
+| `M` | 6,50 | jornada especial 6,5 h |
 
-El 2026 està transcrit del calendari signat i quadra amb tots els totals impresos:
-168 `P` + 41 `V` + 35 `I` + 2 `C` = **1.890,00 h**, amb 16 festius, 3 ponts i 100
-dies no laborables.
+Tots dos anys estan transcrits del calendari signat i quadren amb tots els
+totals impresos:
+
+| Any | Jornades | Teòriques | Festius · ponts · no laborables | Bossa de vacances |
+|---|---|---|---|---|
+| 2026 | 168 `P` + 41 `V` + 35 `I` + 2 `C` | **1.890,00 h** | 16 · 3 · 100 | 144 h |
+| 2027 | 157 `N` + 45 `E` + 38 `S` + 3 `M` | **1.942,00 h** | 15 · 8 · 99 | 200 h |
+
+Al 2027 les jornades curtes **no van lligades al dia de la setmana**: hi ha
+dimarts de 6 h i divendres de 6,5 h, i dos festius cauen en cap de setmana.
+
+La **bossa de vacances** de cada any és a `VACANCES`, al costat de `TYPES`; un
+any nou agafa la del darrer any conegut fins que l'hi posis, i la pots canviar
+a ⚙️ sense tocar el codi.
 
 ### Afegir un any nou
 
-Afegeix una entrada a `CAL` amb 365 lletres (366 si és de traspàs), una per dia.
-La comprovació ràpida és que les hores de cada mes coincideixin amb les del
-calendari signat; el Resum les mostra a la columna «Teòr.».
+1. Si el conveni porta tipus de jornada nous, afegeix-los a `TYPES` amb
+   **lletres que no es facin servir** en cap altre any.
+2. Afegeix una entrada a `CAL` amb 365 lletres (366 si és de traspàs).
+3. Posa la bossa de vacances a `VACANCES` i els noms curts a `JORN_CURTA`, que
+   és el que surt a la columna «Jornada» del PDF.
+
+Dues comprovacions que no fallen: que les hores de cada mes coincideixin amb les
+del calendari signat —el Resum les mostra a la columna «Teòr.»— i que el
+recompte de cada lletra coincideixi amb el de la llegenda del calendari. Si
+quadren totes dues, no hi ha cap dia mal posat.
 
 Si un any no hi és, l'app se'l fabrica amb el patró per defecte (dl-dj 8,25,
 divendres 6,00, caps de setmana lliures) **sense festius ni intensiva**, així que
