@@ -268,44 +268,45 @@ td.dim{color:var(--tx3)}
    Cada any signat porta els seus tipus de jornada, que no tenen per què
    coincidir: per això les lletres no es reaprofiten entre anys encara que
    les hores s'assemblin.
-     2026 · P partida 8,25 · V divendres 6,00 · I intensiva estiu 7,00
-            C curta 6,50                                  (1.890,00 h)
+     2026 · P partida 8,25 · V curta 6,00 · I intensiva estiu 7,00
+            R reduïda 5,00                                (1.894,00 h)
      2027 · N normal 8,50 · E intensiva 7-15 8,00
             S especial 6,00 · M especial 6,50             (1.942,00 h)
    Comunes: F festiu · B pont (vacances) · X no laborable */
 const CAL = {
   2026:
-    "FBXXBFPPVXXPPPPVXXPPPPVXXPPPPVX" + // gener
-    "XPPPPVXXPPPPVXXPPPPVXXPPPPVX"    + // febrer
-    "XPPPPVXXPPPPVXXPPPPVXXPPPPVXXPP" + // març
-    "PBFXXFPPPVXXPPPPVXXPPPPVXXPPPP"  + // abril
-    "FXXPPPPVXXFPPPVXXPPPPVXXPPPPVXX" + // maig
-    "PPPPVXXPPPPVXXPPPPVXXPPFPVXXPP"  + // juny
-    "PPVXXPPPPVXXIIIIIXXIIIIIXXIIIII" + // juliol
-    "XXIIIIIXXIIIIIFXIIIIIXXIIIIIXXP" + // agost
-    "PPPVXXPPPVFXXPPPPVXXPPPPVXXPPP"  + // setembre
-    "PVXXPPPPVXXFPPPVXXPPPPVXXPPPPVX" + // octubre
-    "FPPPPVXXPPPPVXXPPPPVXXPPPPVXXP"  + // novembre
-    "PPPVXFFFPPVXXPPPPVXXPPPCFFXPPPC",  // desembre
+    "FBXXVFPPVXXPPPPVXXPPPPVXXPPPPVX"   + // gener
+    "XPPPPVXXPPPPVXXPPPPVXXPPPPVX"      + // febrer
+    "XPPPPVXXPPPPVXXPPPPVXXPPPPVXXPP"   + // març
+    "PBFXXFPPPVXXPPPPVXXPPPPVXXPPPP"    + // abril
+    "FXXPPPPVXXFPPPVXXPPPPVXXPPPPVXX"   + // maig
+    "PPPPVXXPPPPVXXPPPPVXXPPFPVXXPP"    + // juny
+    "PPVXXPPPPVXXIIIIIXXIIIIIXXIIIII"   + // juliol
+    "XXIIIIIXXIIIIIFXIIIIIXXIIIIIXXP"   + // agost
+    "PPPVXXPPPRFXXPPPPVXXPPPPVXXPPP"    + // setembre
+    "PVXXPPPPVXXFPPPVXXPPPPVXXPPPPVX"   + // octubre
+    "FPPPPVXXPPPPVXXPPPPVXXPPPPVXXP"    + // novembre
+    "PPPVXFFFPPVXXPPPPVXXPPPVFFXPPPV"   , // desembre
   2027:
-    "FXXNSFNMXXNNNNSXXNNNNSXXNNNNSXX" + // gener
-    "NNNNSXXNNNNSXXNNNNSXXNNNNSXX" + // febrer
-    "NNNNSXXNNNNSXXNNNNSXXNNNBFXXFNN" + // març
-    "NSXXNNNNSXXNNNNSXXNNNNBXXNNNNS" + // abril
-    "FXNNNNSXXFNNNMXXNNNNSXXNNNNSXXN" + // maig
-    "NNNSXXNNNNSXXNNNNSXXNNBFBXXEEE" + // juny
-    "EEXXEEEEEXXEEEEEXXEEEEEXXEEEEEX" + // juliol
-    "XEEEEEXXEEEEEXFEEEEEXXEEEEEXXNN" + // agost
-    "NNSXXNNNNSFXNNNNSXXNNNNSXXNNNN" + // setembre
-    "SXXNNNNSXXBFNNMXXNNNNSXXNNNNSXX" + // octubre
-    "FNNNSXXNNNNSXXNNNNSXXNNNNSXXNN" + // novembre
-    "NNSXXFBFNSXXNNNNSXXNNNSBFFNNNSB"   // desembre
+    "FXXNSFNMXXNNNNSXXNNNNSXXNNNNSXX"   + // gener
+    "NNNNSXXNNNNSXXNNNNSXXNNNNSXX"      + // febrer
+    "NNNNSXXNNNNSXXNNNNSXXNNNBFXXFNN"   + // març
+    "NSXXNNNNSXXNNNNSXXNNNNBXXNNNNS"    + // abril
+    "FXNNNNSXXFNNNMXXNNNNSXXNNNNSXXN"   + // maig
+    "NNNSXXNNNNSXXNNNNSXXNNBFBXXEEE"    + // juny
+    "EEXXEEEEEXXEEEEEXXEEEEEXXEEEEEX"   + // juliol
+    "XEEEEEXXEEEEEXFEEEEEXXEEEEEXXNN"   + // agost
+    "NNSXXNNNNSFXNNNNSXXNNNNSXXNNNN"    + // setembre
+    "SXXNNNNSXXBFNNMXXNNNNSXXNNNNSXX"   + // octubre
+    "FNNNSXXNNNNSXXNNNNSXXNNNNSXXNN"    + // novembre
+    "NNSXXFBFNSXXNNNNSXXNNNSBFFNNNSB"     // desembre
 };
 
 const TYPES = {
-  /* 2026 */
-  P:{h:8.25,l:"Jornada partida"}, V:{h:6.00,l:"Divendres"},
-  I:{h:7.00,l:"Intensiva d'estiu"}, C:{h:6.50,l:"Jornada curta"},
+  /* 2026 — la jornada curta és gairebé sempre el divendres, però no només:
+     també el 5 de gener i el 24 i el 31 de desembre */
+  P:{h:8.25,l:"Jornada partida"}, V:{h:6.00,l:"Jornada curta"},
+  I:{h:7.00,l:"Intensiva d'estiu"}, R:{h:5.00,l:"Jornada reduïda"},
   /* 2027 — el conveni en diu «especial», i no van lligades al dia de la
      setmana: hi ha dimarts de 6 h i divendres de 6,5 h */
   N:{h:8.50,l:"Jornada normal"}, E:{h:8.00,l:"Intensiva (7 a 15)"},
@@ -2924,7 +2925,7 @@ function pintaInforme(){
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF". */
 /* Al PDF, noms de jornada curts: amb els llargs («Intensiva d'estiu») la columna
    s'havia de partir en dues línies i cada dia n'ocupava dues. */
-const JORN_CURTA = {P:"Partida", V:"Divendres", I:"Intensiva", C:"Curta",
+const JORN_CURTA = {P:"Partida", V:"Curta 6 h", I:"Intensiva", R:"Reduïda 5 h",
                     N:"Normal", E:"Intensiva", S:"Especial 6 h", M:"Especial 6,5 h",
                     F:"Festiu", B:"Pont", X:"No laborable"};
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF".

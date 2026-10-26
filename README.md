@@ -172,8 +172,9 @@ renda; contrasta-la amb el teu assessor.
 Al **Resum**, al final, hi ha dues targetes. La primera dóna el preu de l'hora
 **real**: al numerador hi va tot el que cobres —salari, pagues extres, hores
 extres pagades i dietes— i al denominador tot el temps que hi poses, **viatges i
-desplaçaments inclosos**. No és el preu de conveni (salari fix contra 1.746 h
-teòriques), sinó el que et surt a la pràctica. Vacances, lliure disposició i
+desplaçaments inclosos**. No és el preu de conveni (salari fix contra les hores
+anuals que tinguis posades als paràmetres de nòmina), sinó el que et surt a la
+pràctica. Vacances, lliure disposició i
 descans compensat queden fora del divisor: es cobren, però no són hores fetes.
 
 Es calcula sobre el **període registrat**, no sobre l'any sencer: si has entrat
@@ -265,10 +266,11 @@ soles el primer cop que obres l'app i la còpia vella s'allibera.
 - Un **rang** només toca dies amb jornada. Per registrar un cap de setmana o un
   festiu treballat, obre aquell dia tot sol.
 - Si no canvies les hores que et proposa, dins d'un rang **cada dia agafa la seva
-  pròpia jornada** (8,25 · 6,00 · 7,00 · 6,50) en comptes d'un número fix.
+  pròpia jornada** —la que li toqui segons el calendari de l'any— en comptes
+  d'un número fix.
 - L'**objectiu** de l'any surt de les hores teòriques del calendari menys les
   hores dels dies marcats com a vacances o lliure disposició. Per al 2026:
-  1.890,00 − 144,00 = **1.746,00 h**; per al 2027, 1.942,00 − 200,00 =
+  1.894,00 − 144,00 = **1.750,00 h**; per al 2027, 1.942,00 − 200,00 =
   **1.742,00 h**, tal com diuen els calendaris signats.
 - Les **hores de vacances que no gastes passen a l'any següent**. El romanent
   es calcula sol: bossa de l'any + el que va sobrar de l'anterior − les hores
@@ -296,10 +298,10 @@ surt a la fitxa del dia i a l'informe és la del conveni d'aquell any.
 | `B` | 0 | pont — compta com a vacances |
 | `X` | 0 | no laborable |
 | **2026** | | |
-| `P` | 8,25 | jornada partida (dl-dj) |
-| `V` | 6,00 | divendres |
+| `P` | 8,25 | jornada partida |
+| `V` | 6,00 | jornada curta |
 | `I` | 7,00 | intensiva d'estiu |
-| `C` | 6,50 | jornada curta (24 i 31 de desembre) |
+| `R` | 5,00 | jornada reduïda (10 de setembre) |
 | **2027** | | |
 | `N` | 8,50 | jornada normal |
 | `E` | 8,00 | intensiva (7 a 15) |
@@ -311,11 +313,20 @@ totals impresos:
 
 | Any | Jornades | Teòriques | Festius · ponts · no laborables | Bossa de vacances |
 |---|---|---|---|---|
-| 2026 | 168 `P` + 41 `V` + 35 `I` + 2 `C` | **1.890,00 h** | 16 · 3 · 100 | 144 h |
+| 2026 | 168 `P` + 43 `V` + 35 `I` + 1 `R` | **1.894,00 h** | 16 · 2 · 100 | 144 h |
 | 2027 | 157 `N` + 45 `E` + 38 `S` + 3 `M` | **1.942,00 h** | 15 · 8 · 99 | 200 h |
 
-Al 2027 les jornades curtes **no van lligades al dia de la setmana**: hi ha
-dimarts de 6 h i divendres de 6,5 h, i dos festius cauen en cap de setmana.
+**Cap dels dos anys lliga la jornada curta amb el dia de la setmana.** Al 2026
+són divendres, però també el dilluns 5 de gener i els dijous 24 i 31 de
+desembre; al 2027 hi ha dimarts de 6 h i divendres de 6,5 h. I els festius no
+cauen sempre entre setmana: el 25 i el 26 de desembre del 2027 són en cap de
+setmana i hi consten com a festius, no com a dies no laborables.
+
+> El 2026 es va transcriure al principi d'un PDF que donava **1.890,00 h**, amb
+> el 5 de gener com a pont, el 10 de setembre de 6 h i el 24 i el 31 de desembre
+> de 6,5 h. El calendari signat penjat a la fàbrica en dóna **1.894,00**, i és
+> el que mana. Si algun dia tornen a no quadrar, les dues comprovacions de sota
+> diuen de seguida quin dia balla.
 
 La **bossa de vacances** de cada any és a `VACANCES`, al costat de `TYPES`; un
 any nou agafa la del darrer any conegut fins que l'hi posis, i la pots canviar
