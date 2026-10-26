@@ -332,6 +332,8 @@ const WDAYS  = ["dl","dt","dc","dj","dv","ds","dg"];
 
 /* ───────────────────────── Dades ───────────────────────── */
 const KEY = "cal_v1_data", KTHM = "cal_v1_thm", KTOK = "cal_v1_tok", KROOT = "cal_v1_root", KPRIV = "cal_v1_priv";
+/* marca que ja s'han passat les hores de conveni de 1.746 a les del calendari */
+const KHORES = "cal_v1_h1750";
 /* preferència d'aquest dispositiu, no va a Drive: al mòbil pots voler-lo i a
    l'ordinador de casa no */
 let PRIVAT = false;
@@ -339,8 +341,8 @@ const DEFCFG = y => ({vacH: VACANCES[y] || VACANCES[Math.max(...Object.keys(VACA
                       ldH:12, carry:0, carryAuto:true, target:null});
 /* Paràmetres de nòmina — valors inicials presos del full ⚙️ Config del
    simulador 2026. Tot el motor llegeix d'aquí: canviant un número es recalcula. */
-const DEFPAY = () => ({
-  salari:47000, pagues:14, horesAny:1746,
+const DEFPAY = (y = YEAR) => ({
+  salari:47000, pagues:14, horesAny:horesConveni(y),
   esmorzar:8, dinar:20, sopar:25, pernocta:30, capSetmana:50, kmEur:0.36,
   intlLab:70, intlFest:100,
   incrExtra:0.10, factCdS:1.5, factLab:1, hJornadaDescans:9, mesosCaducitat:2,
@@ -443,6 +445,21 @@ async function load(){
     try{ const r = localStorage.getItem(KEY); if(r) DB = JSON.parse(r); }catch(e){}
   }
   if(!DB.years) DB = {v:1, years:{}};
+  /* `pay` es desa sencer, així que qui ja tenia l'app instal·lada porta les
+     1.746 h que donava el PDF del 2026 abans de corregir-lo amb el calendari
+     signat. Una sola passada per dispositiu, i només si el número encara és el
+     valor per defecte antic: el que hagis escrit tu no es toca. */
+  try{
+    if(localStorage.getItem(KHORES) !== "1"){
+      let cal = false;
+      for(const y in DB.years){
+        const pay = DB.years[y].pay;
+        if(pay && +pay.horesAny === 1746){ pay.horesAny = horesConveni(+y); cal = true; }
+      }
+      localStorage.setItem(KHORES, "1");
+      if(cal) persist();
+    }
+  }catch(e){}
   DBVER++;
 }
 /** Desa sense fer esperar qui crida: el DB en memòria ja és la font de
@@ -502,7 +519,7 @@ function tancaPas(){
     });
     /* amb els valors per defecte omplerts: que yr() completi una clau nova no
        és cap canvi teu */
-    const norm = o => JSON.stringify([Object.assign(DEFCFG(+y), o.cfg||{}), Object.assign(DEFPAY(), o.pay||{})]);
+    const norm = o => JSON.stringify([Object.assign(DEFCFG(+y), o.cfg||{}), Object.assign(DEFPAY(+y), o.pay||{})]);
     if(norm(a) !== norm(b)) canvis.push({y, t:"cfg", abans:{cfg:copia(a.cfg), pay:copia(a.pay)}});
   });
   foto();
@@ -592,7 +609,7 @@ function yr(y){
      en guarda la referència, i abans es quedava apuntant a una còpia òrfena. */
   const fill = (dst, def) => { for(const k in def) if(!(k in dst)) dst[k] = def[k]; return dst; };
   if(!o.cfg) o.cfg = {}; fill(o.cfg, DEFCFG(+y));
-  if(!o.pay) o.pay = {}; fill(o.pay, DEFPAY());
+  if(!o.pay) o.pay = {}; fill(o.pay, DEFPAY(+y));
   return o;
 }
 
@@ -622,6 +639,17 @@ function dtype(y,m,d){
   return w >= 5 ? "X" : (w === 4 ? "V" : "P");
 }
 const theo = (y,m,d) => TYPES[dtype(y,m,d)].h;
+/** Hores de jornada que té el calendari d'un any, sumades dia a dia. */
+function hTeoriques(y){
+  let h = 0;
+  for(let m = 0; m < 12; m++) for(let d = 1, n = mlen(y,m); d <= n; d++) h += theo(y,m,d);
+  return r2(h);
+}
+/** Les hores anuals del conveni, el divisor de l'hora ordinària. Surten del
+    mateix calendari —teòriques menys la bossa de vacances— perquè no se'n puguin
+    anar l'una de l'altra: 2026, 1.894 − 144 = 1.750; 2027, 1.942 − 200 = 1.742.
+    Si la nòmina en diu una altra, es pot sobreescriure als paràmetres. */
+const horesConveni = y => r2(hTeoriques(+y) - DEFCFG(+y).vacH);
 
 /* Cada dia porta la seva marca de temps `t`: és la unitat que es fusiona entre
    dispositius. Esborrar no treu la clau, hi deixa una làpida {del:1} — si no,
@@ -2461,7 +2489,7 @@ function openCfg(){
       ${S.carry < 0 ? `<br><b style="color:var(--gold)">Surt negatiu</b>: l'any passat vas gastar més vacances de les que tenies, i aquest any en tens menys.` : ""}
       <br>Comprova fins quan te les deixa gastar el teu conveni: no totes les empreses accepten passar-les a l'any següent sense data límit.
       <br>L'objectiu es calcula sol: hores de jornada del calendari menys les dels dies que marquis com a vacances o lliure disposició. Omple l'objectiu manual només si vols fixar-lo tu.
-      <br>Les <b>${fmt(yr(y).pay.horesAny)} h</b> que fa servir la nòmina per calcular l'hora ordinària són una altra cosa: la xifra fixa del conveni, i es canvia als paràmetres de nòmina.</div>
+      <br>Les <b>${fmt(yr(y).pay.horesAny)} h</b> que fa servir la nòmina per calcular l'hora ordinària surten del mateix calendari —teòriques menys la bossa de vacances—, però són un paràmetre a part: si la teva nòmina en diu una altra, canvia-la als paràmetres de nòmina.</div>
     <div class="lbl">Sincronització</div>
     ${!origenValid() ? `<div class="note" style="color:var(--red);margin-bottom:8px">
       <b>Aquí no es pot connectar amb Drive.</b> ${location.protocol==="file:"
@@ -3152,7 +3180,7 @@ function mergeDB(a, b){
     const tria = k => (newerA ? ay[k] : by[k]) || ay[k] || by[k] || {};
     out.years[y] = {days, netReal, cfgT: Math.max(ay.cfgT||0, by.cfgT||0),
                     cfg: Object.assign(DEFCFG(+y), tria("cfg")),
-                    pay: Object.assign(DEFPAY(), tria("pay"))};
+                    pay: Object.assign(DEFPAY(+y), tria("pay"))};
   });
   return out;
 }

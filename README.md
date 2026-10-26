@@ -72,6 +72,12 @@ salari i pagues, dietes nacionals i internacionals, increment d'hores extres,
 quotes de la Seguretat Social, cotització de solidaritat, i els interruptors de
 l'art. 7.p. Els percentatges s'escriuen en tant per u (0,047 = 4,70 %).
 
+Les **hores anuals del conveni** —el divisor de l'hora ordinària, i per tant el
+preu de cada hora extra— no s'escriuen a mà: surten del calendari de l'any, les
+teòriques menys la bossa de vacances (2026: 1.894 − 144 = **1.750 h**; 2027:
+1.942 − 200 = **1.742 h**). Si la teva nòmina en diu una altra, escriu-la al
+paràmetre i mana la teva.
+
 **Les hores extres surten de `hores fetes − hores previstes`.** Les fetes són el
 teu fitxatge (inici/fi/pausa; si no en poses, val el camp d'hores). Les previstes
 són **un camp editable a cada dia**: el calendari només hi posa el valor inicial,
@@ -339,6 +345,8 @@ a ⚙️ sense tocar el codi.
 2. Afegeix una entrada a `CAL` amb 365 lletres (366 si és de traspàs).
 3. Posa la bossa de vacances a `VACANCES` i els noms curts a `JORN_CURTA`, que
    és el que surt a la columna «Jornada» del PDF.
+   Les hores anuals de conveni de la nòmina ja surten d'aquí: no hi ha cap
+   tercera taula per mantenir.
 
 Dues comprovacions que no fallen: que les hores de cada mes coincideixin amb les
 del calendari signat —el Resum les mostra a la columna «Teòr.»— i que el
