@@ -2317,10 +2317,18 @@ function openDay(d){
     const desat = calcDia(y,m,d,rec(y,m,d),P);
     const compta = q => q && !["VAC","LD","DC","POS"].includes((registreForm().s)||"") ? q.extra : 0;
     const acumulat = Math.max(0, r2(S.extra - (desat ? desat.extra : 0) + compta(x)));
-    const fila = (l,v,cls) => `<div style="display:flex;justify-content:space-between;gap:10px">
-      <span class="note" style="margin:0">${l}</span><b class="${cls||""}" style="font-family:monospace">${v}</b></div>`;
-    box.innerHTML =
-      fila("Hores extres del dia", fmt(x.extra) + " h", x.extra ? "pos" : "dim")
+    const fila = (l,v,cls,ind) => `<div style="display:flex;justify-content:space-between;gap:10px">
+      <span class="note" style="margin:0${ind ? ";padding-left:12px" : ""}">${l}</span><b class="${cls||""}" style="font-family:monospace">${v}</b></div>`;
+    /* d'aquestes hores, quantes han anat en moure't: el mateix que la columna
+       Trajecte del Resum i de l'informe, però del dia que tens obert */
+    const traj = x.desp
+      ? fila("Hores fetes", fmt(x.h) + " h")
+        + fila(x.esViatge ? "de viatge" : "de desplaçament", fmt(x.desp) + " h", "dim", 1)
+        + (x.treball ? fila("al client", fmt(x.treball) + " h", "dim", 1) : "")
+        + `<div style="height:6px"></div>`
+      : "";
+    box.innerHTML = traj
+    + fila("Hores extres del dia", fmt(x.extra) + " h", x.extra ? "pos" : "dim")
     + fila("Acumulades l'any, amb aquesta", fmt(acumulat) + " h", "dim")
     + `<div style="height:6px"></div>`
     + fila("Brut del dia", eur(E.brut) + " €")

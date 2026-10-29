@@ -11,7 +11,8 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
 - **Resum** — saldo de l'any i saldo fins avui, vacances restants, hores per mes,
   detall mensual, i el preu de l'hora amb la comparativa com a autònom. La
   targeta i la columna **Trajecte** diuen quantes d'aquelles hores han anat en
-  moure't; ja hi són, dins de les fetes, i no s'hi sumen.
+  moure't; ja hi són, dins de les fetes, i no s'hi sumen. A la **fitxa del dia**, la
+  targeta de sota parteix les hores d'aquell dia en trajecte i estona al client.
 - **Viatges** — dies i hores per destinació, i les estades amb el seu període.
   Un dia fora és un dia amb estat **Estranger** o **Nacional**: un dia a la seu
   no hi compta encara que tingui un codi de destinació (p. ex. «PRODEC»). Si un
