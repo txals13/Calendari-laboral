@@ -784,10 +784,14 @@ function stats(y){
       const h = horesDia(r);   /* si hi ha fitxatge, mana el fitxatge */
       M.done += h; S.done += h;
       if(past) S.doneYTD += h;
-      /* Les hores extres es compten DIA A DIA i no es compensen entre elles:
-         2 h de més un dia i 1 h de menys un altre són 2 h extres, no 1. Per això
-         no serveix el saldo (fetes − objectiu), que sí que les compensa. */
-      if(!["VAC","LD","DC","POS"].includes(r.s)){   /* aquests dies no es treballen */
+      /* El càlcul del dia el fan servir les extres, la utilització i el
+         repartiment per destinació, així que es fa un sol cop. Vacances, lliure
+         disposició, descans compensat i viatges previstos no es treballen. */
+      const x = ["VAC","LD","DC","POS"].includes(r.s) ? null : calcDia(y,m,d,r,o.pay);
+      if(x){
+        /* Les hores extres es compten DIA A DIA i no es compensen entre elles:
+           2 h de més un dia i 1 h de menys un altre són 2 h extres, no 1. Per
+           això no serveix el saldo (fetes − objectiu), que sí que les compensa. */
         const prev = previstes(y,m,d,r);
         const ex = Math.max(0, r2(h - prev));
         /* el que tapa la bossa no és una hora que et falti */
@@ -795,21 +799,18 @@ function stats(y){
         M.extra += ex; S.extra += ex; if(past) S.extraYTD += ex;
         M.curt += cu; S.curt += cu;
         /* utilització: fora de planta si el dia és de viatge, si no a planta */
-        const x = calcDia(y,m,d,r,o.pay);
-        if(x){
-          if(r.s === "EST" || r.s === "NAC"){
-            S.hForaOrd += x.ordin;      S.hForaExt += ex;
-            S.hTrebOrd += x.trebOrd;    S.hTrebExt += x.trebExt;
-            if(x.esViatge){ S.hViatgeOrd += x.despOrd; S.hViatgeExt += x.despExt; S.diesViatge++; }
-            else          { S.hDespOrd   += x.despOrd; S.hDespExt   += x.despExt; }
-          } else S.hPlantaOrd += x.ordin;
-          /* El trajecte del dia, sigui a fora o a la seu: les targetes de
-             Viatges parteixen les hores en ordinàries i extraordinàries, que és
-             el que necessita l'art. 7.p; aquí només volem saber quanta estona
-             del mes ha anat en carretera o en avió. */
-          if(x.esViatge){ M.viatge += x.desp; S.viatgeTot += x.desp; }
-          else          { M.desp   += x.desp; S.despTot   += x.desp; }
-        }
+        if(r.s === "EST" || r.s === "NAC"){
+          S.hForaOrd += x.ordin;      S.hForaExt += ex;
+          S.hTrebOrd += x.trebOrd;    S.hTrebExt += x.trebExt;
+          if(x.esViatge){ S.hViatgeOrd += x.despOrd; S.hViatgeExt += x.despExt; S.diesViatge++; }
+          else          { S.hDespOrd   += x.despOrd; S.hDespExt   += x.despExt; }
+        } else S.hPlantaOrd += x.ordin;
+        /* El trajecte del dia, sigui a fora o a la seu: les targetes de
+           Viatges parteixen les hores en ordinàries i extraordinàries, que és
+           el que necessita l'art. 7.p; aquí només volem saber quanta estona
+           del mes ha anat en carretera o en avió. */
+        if(x.esViatge){ M.viatge += x.desp; S.viatgeTot += x.desp; }
+        else          { M.desp   += x.desp; S.despTot   += x.desp; }
       }
       if(r.s){
         S.days[r.s] = (S.days[r.s]||0) + 1;
@@ -823,9 +824,9 @@ function stats(y){
          taula com 89 dies fora mentre el KPI de sobre en deia 0. */
       if(esFora(r)){
         const k = clauDest(r);
-        S.dest[k] = S.dest[k] || {days:0, worked:0, hours:0};
+        S.dest[k] = S.dest[k] || {days:0, worked:0, hours:0, traj:0};
         S.dest[k].days++;
-        if(h > 0){ S.dest[k].worked++; S.dest[k].hours += h; }
+        if(h > 0){ S.dest[k].worked++; S.dest[k].hours += h; if(x) S.dest[k].traj += x.desp; }
       }
       if(h > 0){
         M.days++; S.worked++;
@@ -1539,8 +1540,8 @@ function kpiBossa(y, kpi, B = bossa(y)){
 function viewTrv(){
   const y = YEAR, S = stats(y);
   const ks = Object.keys(S.dest).sort((a,b) => S.dest[b].days - S.dest[a].days);
-  const rows = ks.length ? ks.map(k => `<tr><td>${esc(k)}</td><td>${S.dest[k].days}</td><td class="dim">${S.dest[k].worked}</td><td>${fmt(S.dest[k].hours)}</td></tr>`).join("")
-                         : `<tr><td colspan="4" class="dim" style="text-align:left">Cap destinació registrada encara.</td></tr>`;
+  const rows = ks.length ? ks.map(k => `<tr><td>${esc(k)}</td><td>${S.dest[k].days}</td><td class="dim">${S.dest[k].worked}</td><td>${fmt(S.dest[k].hours)}</td><td class="dim">${S.dest[k].traj ? fmt(S.dest[k].traj) : "—"}</td></tr>`).join("")
+                         : `<tr><td colspan="5" class="dim" style="text-align:left">Cap destinació registrada encara.</td></tr>`;
   /* estades = trams consecutius amb la mateixa destinació */
   const trips = [];
   let cur = null;
@@ -1589,8 +1590,9 @@ function viewTrv(){
   ${blocUtilitzacio(y, S)}
   <div class="card">
     <div class="card-t">Dies per destinació — ${y}</div>
-    <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). Només hi compten els dies amb estat <b>Estranger</b> o <b>Nacional</b>: un dia a la seu no és un dia fora, encara que hi posis un codi. <b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius. <b>Treballats</b> són els que tenen hores.</div>
+    <table><thead><tr><th>Destinació</th><th>Dies fora</th><th>Treballats</th><th>Hores</th>
+      <th title="hores de viatge i desplaçament, ja incloses a les hores">Trajecte</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">La destinació és el codi que escrius a l'editor del dia (p. ex. <b>CA</b>, <b>PL</b>, <b>FR</b>). Només hi compten els dies amb estat <b>Estranger</b> o <b>Nacional</b>: un dia a la seu no és un dia fora, encara que hi posis un codi. <b>Dies fora</b> són dies naturals: hi entren caps de setmana i festius. <b>Treballats</b> són els que tenen hores, i <b>Trajecte</b> diu quantes d'aquelles hores van anar a moure't fins allà i tornar.</div>
     <div class="chips" style="margin-top:10px">
       <button class="btn sm pri" id="viaInf">Fes un informe de viatges…</button>
     </div>
@@ -1654,7 +1656,7 @@ function blocUtilitzacio(y, S){
     </div>
     <div class="note"><b>Viatge</b> és el trajecte llarg —un dia fitxat només amb «surto → arribo», sense estona al lloc de treball, com un BCN-MEX. <b>Desplaçament</b> és l'anar i venir del dia a dia: hotel-fàbrica i tornada. La resta de les hores del dia són treball efectiu al client. Les <b>extraordinàries queden sota la ratlla</b>: si les sumessis al percentatge, barrejaries capacitat ordinària amb hores extres i el número deixaria de voler dir res. El viatge que cap dins la jornada <b>no</b> és extraordinari pel fet de ser viatge; el que la supera, sí. Per això el desplaçament s'imputa primer a les hores extres. Els caps de setmana i festius no tenen jornada, així que tot el que hi facis hi surt com a extraordinari.
       <br><b>A</b> és quina part de la jornada ordinària passes fora de planta. <b>B</b> són les hores addicionals que has necessitat perquè el servei exterior no cabia dins la jornada: si creix, és senyal que el departament necessita més mans.
-      <br>La <b>capacitat</b> és l'objectiu de l'any: hores del calendari menys les dels dies que marquis com a vacances. Ara són ${fmt(cap)} h; amb la bossa sencera de vacances marcada baixarà a les 1.746 h del conveni, que és el denominador correcte —el temps de vacances no és capacitat disponible.</div>
+      <br>La <b>capacitat</b> és l'objectiu de l'any: hores del calendari menys les dels dies que marquis com a vacances. Ara són ${fmt(cap)} h; amb la bossa sencera de vacances marcada baixarà a les ${fmt(horesConveni(y))} h del conveni, que és el denominador correcte —el temps de vacances no és capacitat disponible.</div>
   </div>`;
 }
 
@@ -1780,7 +1782,7 @@ function blocRealAny(y, A){
     Al numerador hi va el brut sencer —salari, pagues extres, hores extres
     pagades i dietes—, i al denominador les hores fitxades de debò, viatge i
     desplaçament inclosos. No és el preu de conveni, que només mira el salari
-    fix contra les 1.746 h teòriques: és el que et surt a la pràctica.
+    fix contra les hores anuals del conveni: és el que et surt a la pràctica.
 
     Es fa sobre el PERÍODE REGISTRAT, no sobre l'any sencer. Si has entrat
     l'agost, l'any encara no ha passat, i comparar cinc mesos de sou contra
