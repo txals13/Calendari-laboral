@@ -9,7 +9,9 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
   vacances, lliure disposició), posar-hi les hores fetes i una destinació.
   «Aplica fins a» repeteix la marca a tot un rang de dates.
 - **Resum** — saldo de l'any i saldo fins avui, vacances restants, hores per mes,
-  detall mensual, i el preu de l'hora amb la comparativa com a autònom.
+  detall mensual, i el preu de l'hora amb la comparativa com a autònom. La
+  targeta i la columna **Trajecte** diuen quantes d'aquelles hores han anat en
+  moure't; ja hi són, dins de les fetes, i no s'hi sumen.
 - **Viatges** — dies i hores per destinació, i les estades amb el seu període.
   Un dia fora és un dia amb estat **Estranger** o **Nacional**: un dia a la seu
   no hi compta encara que tingui un codi de destinació (p. ex. «PRODEC»). Si un
@@ -36,6 +38,11 @@ del calendari) obre una sola fitxa per als dos informes:
 - **Només els dies marcats al calendari**: marca'ls amb ☑ i prem «Informe» a
   la barra; el període s'ajusta sol.
 - **A nom de**: el nom i l'empresa de la capçalera.
+
+El **registre de jornada** porta, a cada dia, les hores fetes i quantes han
+anat en **trajecte**, i al peu el total partit en viatge —el trajecte llarg, un
+vol— i desplaçament —l'anar i venir del dia a dia. Si al període només hi ha
+hagut una de les dues coses, el peu la diu pel seu nom.
 
 A sota compta en directe quants dies i hores hi entren. Si el filtre deixa dies
 fora, l'informe ho diu a la capçalera («Inclou: destinació MX, PL») i el fitxer

@@ -155,6 +155,9 @@ tr:last-child td{border-bottom:none}
 tfoot td{font-weight:700;border-top:1px solid var(--br2);border-bottom:none;padding-top:7px}
 td.pos{color:var(--green)}td.neg{color:var(--red)}
 td.dim{color:var(--tx3)}
+/* amb la columna del trajecte, al detall mensual hi ha set columnes: en una
+   pantalla de telèfon els 6 px de marge les treien fora de la targeta */
+@media(max-width:420px){table{font-size:12px}th,td{padding-left:4px;padding-right:4px}}
 /* chart */
 .chartwrap{position:relative;overflow-x:auto}
 /* al mòbil el gràfic no s'encongeix fins a fer-se il·legible: fa scroll dins la targeta */
@@ -207,6 +210,9 @@ td.dim{color:var(--tx3)}
   #print table{width:100%;border-collapse:collapse;font-size:8pt}
   /* una línia per dia: res es parteix, llevat de la nota */
   #print th,#print td{border:0.4pt solid #999;padding:1mm 1.3mm;text-align:left;vertical-align:top;white-space:nowrap}
+  /* 13 columnes en un A4 vertical: amb 1,3 mm de marge no hi caben, i com que
+     res es pot partir, el que sobra quedaria tallat fora de la pàgina */
+  #print table.jornada th,#print table.jornada td{padding:1mm 1mm}
   #print tr.nota td{white-space:normal;font-family:-apple-system,"Segoe UI",system-ui,sans-serif;
     font-style:italic;color:#333;border-top:none;padding:0.6mm 1.3mm 1.2mm 6mm}
   #print tr.amb-nota td{border-bottom-color:transparent}
@@ -757,10 +763,12 @@ function stats(y){
        jornada ordinària/extraordinària */
     hForaOrd:0, hForaExt:0, hDespOrd:0, hDespExt:0, hTrebOrd:0, hTrebExt:0, hPlantaOrd:0,
     hViatgeOrd:0, hViatgeExt:0, diesViatge:0,
+    /* hores de carretera de l'any: van DINS de les fetes, i es veuen a part */
+    viatgeTot:0, despTot:0,
     dest:{}, cfg:o.cfg
   };
   for(let m=0;m<12;m++){
-    const M = {theo:0, done:0, vac:0, ld:0, days:0, extra:0, curt:0};
+    const M = {theo:0, done:0, vac:0, ld:0, days:0, extra:0, curt:0, viatge:0, desp:0};
     for(let d=1; d<=mlen(y,m); d++){
       const t = dtype(y,m,d), r = rec(y,m,d);
       /* fora del contracte la jornada no et compta com a objectiu */
@@ -795,6 +803,12 @@ function stats(y){
             if(x.esViatge){ S.hViatgeOrd += x.despOrd; S.hViatgeExt += x.despExt; S.diesViatge++; }
             else          { S.hDespOrd   += x.despOrd; S.hDespExt   += x.despExt; }
           } else S.hPlantaOrd += x.ordin;
+          /* El trajecte del dia, sigui a fora o a la seu: les targetes de
+             Viatges parteixen les hores en ordinàries i extraordinàries, que és
+             el que necessita l'art. 7.p; aquí només volem saber quanta estona
+             del mes ha anat en carretera o en avió. */
+          if(x.esViatge){ M.viatge += x.desp; S.viatgeTot += x.desp; }
+          else          { M.desp   += x.desp; S.despTot   += x.desp; }
         }
       }
       if(r.s){
@@ -821,6 +835,7 @@ function stats(y){
         if(r.s === "NAC"){ S.foraTreb++; S.foraTrebNAC++; }
       }
     }
+    M.viatge = r2(M.viatge); M.desp = r2(M.desp); M.traj = r2(M.viatge + M.desp);
     M.target = M.theo - M.vac - M.ld;
     M.saldo  = M.done - M.target;
     S.months.push(M);
@@ -839,6 +854,7 @@ function stats(y){
   S.saldo      = S.done - S.target;
   S.targetYTD  = S.theoYTD - S.vacYTD - S.ldYTD;
   S.saldoYTD   = S.doneYTD - S.targetYTD;
+  S.trajTot    = r2(S.viatgeTot + S.despTot);
   S.carry      = carryDe(y);
   S.vacBossa   = r2((+o.cfg.vacH || 0) + S.carry);
   S.vacLeft    = r2(S.vacBossa - S.vacH);
@@ -1434,6 +1450,7 @@ function viewSum(){
   const rows = S.months.map((M,i) => `<tr>
       <td>${MSHORT[i]}</td><td>${fmt(M.target)}</td>
       <td>${M.done?fmt(M.done):"—"}</td>
+      <td class="dim"${M.traj?` title="viatge ${fmt(M.viatge)} h · desplaçament ${fmt(M.desp)} h"`:""}>${M.traj?fmt(M.traj):"—"}</td>
       <td class="${M.extraNet>0?"pos":"dim"}"${M.comp?` title="fetes ${fmt(M.extra)} · tornades en descans ${fmt(M.comp)}"`:""}>${
         M.extra ? fmt(M.extraNet) + (M.comp ? `<small class="dim"> (−${fmt(M.comp)})</small>` : "") : "—"}</td>
       <td class="${M.done||M.vac||M.ld?(M.saldo>=0?"pos":"neg"):"dim"}">${M.done||M.vac||M.ld?sgn(M.saldo):"—"}</td>
@@ -1447,6 +1464,8 @@ function viewSum(){
           S.extra>0?"pos":"", true)}
     ${kpi("Saldo de l'any (h)", sgn(S.saldo), "fetes "+fmt(S.done)+" · objectiu "+fmt(S.target), S.saldo>=0?"pos":"neg")}
     ${kpi("Saldo fins avui (h)", sgn(S.saldoYTD), "objectiu a data d'avui "+fmt(S.targetYTD), S.saldoYTD>=0?"pos":"neg")}
+    ${S.trajTot ? kpi("Trajecte (h)", fmt(S.trajTot),
+          "viatge " + fmt(S.viatgeTot) + " · desplaçament " + fmt(S.despTot) + " · dins de les fetes") : ""}
     ${kpi("Vacances restants (h)", fmt(S.vacLeft),
           "de " + fmt(S.vacBossa) + " h" + (S.carry ? " (" + fmt(+S.cfg.vacH||0) + " " + sgn(S.carry) + " de l'any abans)" : "")
           + " · " + S.days.VAC + " dies marcats", S.vacLeft<0?"neg":"")}
@@ -1468,10 +1487,13 @@ function viewSum(){
   <div class="card">
     <div class="card-t">Detall mensual</div>
     <table>
-      <thead><tr><th>Mes</th><th>Objectiu</th><th>Fetes</th><th>Extres</th><th>Saldo</th><th>Dies</th></tr></thead>
+      <thead><tr><th>Mes</th><th>Objectiu</th><th>Fetes</th>
+        <th title="hores de viatge i desplaçament, ja incloses a les fetes">Trajecte</th>
+        <th>Extres</th><th>Saldo</th><th>Dies</th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td>Any</td><td>${fmt(S.target)}</td>
-        <td>${fmt(S.done)}</td><td class="${S.extra>0?"pos":"dim"}">${fmt(S.extra)}</td>
+        <td>${fmt(S.done)}</td><td class="dim">${S.trajTot?fmt(S.trajTot):"—"}</td>
+        <td class="${S.extra>0?"pos":"dim"}">${fmt(S.extra)}</td>
         <td class="${S.saldo>=0?"pos":"neg"}">${sgn(S.saldo)}</td><td>${S.worked}</td></tr></tfoot>
     </table>
   </div>
@@ -1491,6 +1513,7 @@ function viewSum(){
     </div>
     <div class="note">Teòriques de l'any segons calendari: <b>${fmt(S.theoTot)} h</b>. L'objectiu descompta les hores dels dies marcats com a vacances o lliure disposició${S.cfg.target!=null&&S.cfg.target!==""?" (ara sobreescrit manualment a "+fmt(+S.cfg.target)+" h)":""}.
       <br><b>Les extres que tornes en descans es descompten</b> del mes en què les vas fer, tant si les gastes amb un dia sencer de descans com amb unes hores de la bossa: ja no són hores pendents. Les pagades segueixen comptant.
+      <br>El <b>trajecte</b> són les hores de viatge i desplaçament que ja hi ha dins de les fetes: no se sumen, només t'hi diuen quanta estona del mes ha anat en moure't. El repartiment entre jornada ordinària i extraordinària és a la pestanya <b>Viatges</b>.
       <br><b>Extres i saldo no són el mateix.</b> Les extres es compten dia a dia i no es compensen: 2 h de més un dia i 1 h de menys un altre són 2 h extres. El saldo sí que les compensa, i serveix per saber si vas avançat o endarrerit${S.curt?", que aquí van "+fmt(S.curt)+" h per sota de la jornada":""}.</div>
   </div>
   ${blocPreuHora(y)}`;
@@ -2733,7 +2756,7 @@ function dlBlob(name, blob){
    Full de registre de jornada per presentar a l'empresa: un dia per fila, amb
    el fitxatge, l'estat i les hores extres, i els totals. */
 const COLS_INFORME = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
-                      "Pausa (h)","Hores fetes","Previstes","Extres","Bossa (h)","Nota"];
+                      "Pausa (h)","Hores fetes","Trajecte (h)","Previstes","Extres","Bossa (h)","Nota"];
 const MESOS_TOT = -1;
 /** Un dia de desplaçament és un dia amb estat Estranger o Nacional. */
 const esFora = r => !!r && (r.s === "EST" || r.s === "NAC");
@@ -2895,7 +2918,7 @@ function pintaInforme(){
     </div>
     <div class="note">${via
       ? "Un dia per fila amb el fitxatge, la destinació, les hores de viatge, de desplaçament i de treball al client, i la dieta, més el resum per destinació. Els imports hi surten encara que tinguis els diners amagats."
-      : "Un dia per fila amb el fitxatge, l'estat, les hores fetes, les previstes, les extres i la bossa, més els totals i espai per a signatures."}
+      : "Un dia per fila amb el fitxatge, l'estat, les hores fetes, quantes han anat en trajecte, les previstes, les extres i la bossa, més els totals i espai per a signatures."}
       El PDF surt del diàleg d'impressió: tria «Desa com a PDF».</div>
     <div class="acts">
       <button class="btn" id="fXls"${dies.length ? "" : " disabled"}>Excel</button>
@@ -2954,7 +2977,7 @@ function pintaInforme(){
 /* Al PDF, noms de jornada curts: amb els llargs («Intensiva d'estiu») la columna
    s'havia de partir en dues línies i cada dia n'ocupava dues. */
 const JORN_CURTA = {P:"Partida", V:"Curta 6 h", I:"Intensiva", R:"Reduïda 5 h",
-                    N:"Normal", E:"Intensiva", S:"Especial 6 h", M:"Especial 6,5 h",
+                    N:"Normal", E:"Intensiva", S:"Esp. 6 h", M:"Esp. 6,5 h",
                     F:"Festiu", B:"Pont", X:"No laborable"};
 /** Informe imprimible. El navegador el converteix en PDF des de "Desa com a PDF".
     Cada dia és UNA línia; la nota, si n'hi ha, va a sota ocupant tota l'amplada,
@@ -2964,10 +2987,10 @@ function imprimeixInforme(F){
   if(!files.length) return senseDies(F, false);
   /* les mateixes columnes que el full de càlcul, menys la nota; les unitats van
      al peu, i així les capçaleres no obliguen a eixamplar les columnes */
-  const COLS = ["Data","Dia","Jornada","Estat","Destinació","Entrada","Sortida",
-                "Pausa","Fetes","Previstes","Extres","Bossa"];
-  const NOTA = COLS_INFORME.length - 1, BOSSA = 11, JORN = 2;
-  const num = new Set([7,8,9,10,11]);   /* columnes numèriques, alineades a la dreta */
+  const COLS = ["Data","Dia","Jornada","Estat","Destí","Entrada","Sortida",
+                "Pausa","Fetes","Trajecte","Previst","Extres","Bossa"];
+  const NOTA = COLS_INFORME.length - 1, BOSSA = 12, JORN = 2;
+  const num = new Set([7,8,9,10,11,12]);   /* columnes numèriques, alineades a la dreta */
   const cap = COLS.map((h,i) => `<th${num.has(i)?' class="r"':""}>${esc(h)}</th>`).join("");
   /* un <tbody> per dia: així el dia i la seva nota no se separen entre pàgines */
   const cos = files.map(f => {
@@ -2981,6 +3004,7 @@ function imprimeixInforme(F){
     return `<tbody><tr${nota ? ' class="amb-nota"' : ""}>${cel}</tr>${nota}</tbody>`;
   }).join("");
   const bossaNeta = r2(totals.bossaEntra - totals.bossaSurt);
+  const R = resumHores(totals);
   const doc = document.getElementById("print");
   doc.innerHTML = `
     <h1>Registre de jornada</h1>
@@ -2992,13 +3016,14 @@ function imprimeixInforme(F){
         <td colspan="7"><b>Totals</b> — ${totals.dies} dies amb hores registrades</td>
         <td class="r"></td>
         <td class="r"><b>${fmt(totals.hores)}</b></td>
+        <td class="r">${totals.trajecte ? fmt(totals.trajecte) : ""}</td>
         <td class="r">${fmt(totals.previstes)}</td>
         <td class="r"><b>${fmt(totals.extres)}</b></td>
         <td class="r">${totals.bossaEntra || totals.bossaSurt ? sgn(bossaNeta) : ""}</td>
       </tr></tfoot>
     </table>
     <div class="peu">
-      ${resumExtres(totals).length ? `<table class="resum"><tbody>${resumExtres(totals).map(([l,v,tipus,ind,saldo]) =>
+      ${R.length ? `<table class="resum"><tbody>${R.map(([l,v,tipus,ind,saldo]) =>
         `<tr${saldo ? ' class="saldo"' : ""}><td${ind ? ' class="ind"' : ""}>${esc(l)}</td>
          <td class="r">${tipus === "b" ? sgn(v) : fmt(v)} h</td></tr>`).join("")}</tbody></table>` : ""}
       <div class="signa">
@@ -3091,22 +3116,27 @@ function exportaXlsx(F){
   const {files, totals} = filesInforme(F);
   if(!files.length) return senseDies(F, false);
   const dades = [COLS_INFORME, ...files, [],
-    ["Totals", "", "", "", "", "", "", "", totals.hores, totals.previstes, totals.extres,
-     r2(totals.bossaEntra - totals.bossaSurt), totals.dies + " dies amb hores"]];
-  const R = resumExtres(totals);
+    ["Totals", "", "", "", "", "", "", "", totals.hores, totals.trajecte, totals.previstes,
+     totals.extres, r2(totals.bossaEntra - totals.bossaSurt), totals.dies + " dies amb hores"]];
+  const R = resumHores(totals);
   if(R.length){
     dades.push([]);
-    /* el valor va a la columna que li toca: extres sota Extres, bossa sota Bossa */
-    R.forEach(([l,v,tipus,ind]) => { const fila = [(ind ? "   " : "") + l, "", "", "", "", "", "", "", "", "", "", "", ""];
-      fila[tipus === "b" ? 11 : 10] = v; dades.push(fila); });
+    /* el valor va a la columna que li toca: trajecte sota Trajecte, extres sota
+       Extres, bossa sota Bossa */
+    R.forEach(([l,v,tipus,ind]) => {
+      const fila = Array(COLS_INFORME.length).fill("");
+      fila[0] = (ind ? "   " : "") + l;
+      fila[tipus === "b" ? 12 : tipus === "t" ? 9 : 11] = v;
+      dades.push(fila);
+    });
   }
   if(textFiltre(F, false)) dades.push([], ["Filtre", textFiltre(F, false)]);
-  const amples = [11,6,17,12,11,9,9,9,11,10,9,10,30];
+  const amples = [11,6,17,12,11,9,9,9,11,11,10,9,10,30];
   dlBlob(nomInforme("registre-jornada", F, "xlsx"), xlsx(dades, amples, nomFull(F)));
 }
 function filesInforme(F){
   const files = [];
-  let tH = 0, tP = 0, tE = 0, tDies = 0, tBe = 0, tBs = 0, tEp = 0, tEb = 0;
+  let tH = 0, tP = 0, tE = 0, tDies = 0, tBe = 0, tBs = 0, tEp = 0, tEb = 0, tV = 0, tD = 0;
   for(const {y,m,d,r} of diesInforme(F, false)){
     const x = calcDia(y,m,d,r,yr(y).pay); if(!x) continue;
     const t = dtype(y,m,d);
@@ -3114,9 +3144,12 @@ function filesInforme(F){
       iso(y,m,d), WDAYS[wday(y,m,d)], TYPES[t].l,
       r.s ? STATES[r.s].l : "", r.d || "",
       r.i || "", r.f || "", +r.p || 0,
-      x.h, x.prev, x.extra, r2(x.generat - x.gaudit), r.n || ""
+      x.h, x.desp, x.prev, x.extra, r2(x.generat - x.gaudit), r.n || ""
     ]);
     tH += x.h; tP += x.prev; tE += x.extra; if(x.h > 0) tDies++;
+    /* el trajecte va dins de les hores fetes; al peu es parteix en viatge
+       —el trajecte llarg— i desplaçament, l'anar i venir del dia a dia */
+    tV += x.viatge; tD += x.desplacament;
     tBe += x.generat; tBs += x.gaudit;
     /* una extra o es cobra o va a la bossa: així el total d'extres es parteix
        en dues i s'hi veu la mitja hora que no surt a la nòmina */
@@ -3124,8 +3157,23 @@ function filesInforme(F){
   }
   return {files, totals:{hores:r2(tH), previstes:r2(tP), extres:r2(tE), dies:tDies,
                          extresPagades:r2(tEp), extresBossa:r2(tEb),
-                         bossaEntra:r2(tBe), bossaSurt:r2(tBs)}};
+                         bossaEntra:r2(tBe), bossaSurt:r2(tBs),
+                         viatge:r2(tV), desp:r2(tD), trajecte:r2(tV + tD)}};
 }
+/** Les hores de trajecte del període, si n'hi ha. Van dins de les fetes, i per
+    això al peu i no a la ratlla de totals: sumades amb les hores del dia donarien
+    un número que no vol dir res. */
+function resumTrajecte(t){
+  if(!t.trajecte) return [];
+  /* si al període només hi ha hagut una de les dues coses, es diu pel seu nom:
+     «Hores de trajecte» tot sol no distingeix un vol de l'anar a la fàbrica */
+  if(!t.viatge) return [["Hores de desplaçament", t.desp, "t"]];
+  if(!t.desp)   return [["Hores de viatge", t.viatge, "t"]];
+  return [["Hores de trajecte", t.trajecte, "t"],
+          ["viatge — el trajecte llarg", t.viatge, "t", 1],
+          ["desplaçament del dia a dia", t.desp, "t", 1]];
+}
+const resumHores = t => [...resumTrajecte(t), ...resumExtres(t)];
 /** Resum d'extres i bossa, fila a fila: el total de la columna Bossa és un
     saldo, i +0,50 i −0,50 hi donen +0,00, que sembla que no sumi. Aquí es veu
     què ha entrat, què s'ha gaudit i quantes extres hi ha anat. Només si n'hi ha. */
