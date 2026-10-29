@@ -8,6 +8,12 @@ laboral signat. Sense servidor, sense macros: obre `index.html` i ja funciona.
 - **Calendari** — toca un dia per marcar-lo (HQ, estranger, nacional, previst,
   vacances, lliure disposició), posar-hi les hores fetes i una destinació.
   «Aplica fins a» repeteix la marca a tot un rang de dates.
+  La fila d'indicadors porta un comptador de **vacances** amb les hores que et
+  queden de l'any; amb dies marcats amb ☑ hi surt també com quedaria la bossa
+  si els marquessis com a vacances (`144,00 → 105,00 h`), i es mou mentre els
+  tries. Els dies que ja són vacances no s'hi tornen a descomptar, i els que no
+  tenen jornada —caps de setmana, festius i els de fora del contracte— no hi
+  resten res.
 - **Resum** — saldo de l'any i saldo fins avui, vacances restants, hores per mes,
   detall mensual, i el preu de l'hora amb la comparativa com a autònom. La
   targeta i la columna **Trajecte** diuen quantes d'aquelles hores han anat en

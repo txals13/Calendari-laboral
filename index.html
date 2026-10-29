@@ -1315,6 +1315,18 @@ function viewCal(){
            + (tag ? `<span class="tag">${tag}</span>` : "") + bs
            + `<span class="n">${d}</span><span class="h">${h}</span></div>`;
   }
+  /* Vacances que et queden de l'any i, si tens dies marcats, com quedaria la
+     bossa si els marquessis com a vacances: el comptador es mou mentre els
+     tries, que és quan necessites saber si t'hi caben. */
+  const vacSel = r2([...SELDIES].reduce((a,k) => {
+    const {y:yy, m:mm, d:dd} = partDia(k);
+    if(yy !== y) return a;                        /* la bossa és de l'any que mires */
+    const q = rec(yy,mm,dd);
+    if(q && q.s === "VAC") return a;              /* aquest ja hi compta */
+    return a + (dinsContracte(yy,mm,dd,P) ? theo(yy,mm,dd) : 0);
+  }, 0));
+  const vacDesp = r2(S.vacLeft - vacSel);
+  const vb = v => `<b${v < 0 ? ' style="color:var(--red)"' : ""}>${fmt(v)}</b>`;
   const leg = [["t-X","No laborable"],["t-F","Festiu"],["t-B","Pont"],["s-HQ","HQ"],
                ["s-EST","Estranger"],["s-NAC","Nacional"],["s-VAC","Vacances"],["s-LD","Lliure disp."]]
     .map(([c,l]) => `<span><i class="sw ${c}"></i>${l}</span>`).join("");
@@ -1331,6 +1343,10 @@ function viewCal(){
     <span class="chip ${M.saldo>=0?"pos":"neg"}">saldo <b>${sgn(M.saldo)}</b> h</span>
     <span class="chip">dies <b>${M.days}</b></span>
     <span class="chip" title="Bossa d'hores de descans a final de mes">bossa <b>${fmt(B.saldo[m])}</b> h</span>
+    <span class="chip" title="Vacances de tot l'any: ${fmt(S.vacBossa)} h${
+      S.carry ? " (" + fmt(+S.cfg.vacH||0) + " " + sgn(S.carry) + " de l'any passat)" : ""
+      } − ${fmt(S.vacH)} h ja marcades${vacSel ? " − " + fmt(vacSel) + " h dels dies seleccionats" : ""}">vacances ${
+      vb(S.vacLeft)}${vacSel ? " → " + vb(vacDesp) : ""} h</span>
   </div>
   <div class="calwrap${PICKING?" picking":""}">
     ${SELDIES.size ? `<div class="selbar"><b>${SELDIES.size}</b> ${SELDIES.size===1?"dia marcat":"dies marcats"}
